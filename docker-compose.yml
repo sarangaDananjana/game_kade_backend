@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    # Pass the production environment file
+    env_file:
+      - .env.prod
+    ports:
+      - "8000:8000"
+    # This command runs migrations and then starts the gunicorn production server
+    command: sh -c "python manage.py migrate && gunicorn food_delivery.wsgi:application --bind 0.0.0.0:8000"
+    restart: always
