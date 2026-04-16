@@ -4,6 +4,7 @@ from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import CustomUser, OTP
 from .utils import generate_otp_code, send_otp_sms
+from django.http import HttpResponse
 
 
 class SendOTPView(APIView):
@@ -101,3 +102,7 @@ class VerifyOTPView(APIView):
             'access': str(refresh.access_token),
             'refresh': str(refresh),
         }, status=status.HTTP_200_OK)
+
+
+def home_view(request):
+    return HttpResponse("<h1>Hello World! Welcome to the Food Delivery API 🍔</h1>")

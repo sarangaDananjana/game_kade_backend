@@ -16,9 +16,11 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from users import views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     # Include users app URLs under the /api/auth/ prefix
     path('api/auth/', include('users.urls')),
+    path('', views.home_view, name="home")
 ]
