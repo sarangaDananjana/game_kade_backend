@@ -51,6 +51,8 @@ INSTALLED_APPS = [
 
     # Local apps
     'users',
+    'products',
+    'orders',
 ]
 
 AUTH_USER_MODEL = 'users.CustomUser'

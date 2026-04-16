@@ -16,3 +16,4 @@ sqlparse==0.5.5
 tzdata==2026.1
 urllib3==2.6.3
 gunicorn>=21.2.0
+pillow==12.2.0
