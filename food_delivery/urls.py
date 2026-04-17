@@ -16,6 +16,8 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
 from users import views
 
 urlpatterns = [
@@ -26,3 +28,8 @@ urlpatterns = [
     path('api/products/', include('products.urls')),
     path('api/orders/', include('orders.urls')),
 ]
+
+# Serve media files (like product images) during development
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL,
+                          document_root=settings.MEDIA_ROOT)
