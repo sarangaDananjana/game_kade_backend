@@ -22,5 +22,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     # Include users app URLs under the /api/auth/ prefix
     path('api/auth/', include('users.urls')),
-    path('', views.home_view, name="home")
+    path('', views.home_view, name="home"),
+    path('api/products/', include('products.urls')),
+    path('api/orders/', include('orders.urls')),
 ]
