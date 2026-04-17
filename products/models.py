@@ -13,3 +13,14 @@ class Product(models.Model):
 
     def __str__(self):
         return f"{self.name}"
+
+
+class Featured(models.Model):
+    topic = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    image = models.ImageField(upload_to='featured_images/')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.topic}"
