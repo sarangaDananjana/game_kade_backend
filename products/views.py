@@ -10,14 +10,22 @@ class ProductSerializer(serializers.ModelSerializer):
         model = Product
         fields = '__all__'
 
-# ViewSet handles GET, POST, PUT, DELETE automatically
-
 
 class ProductViewSet(viewsets.ModelViewSet):
-    queryset = Product.objects.all()
     serializer_class = ProductSerializer
     # Anyone can view products, but only authenticated users (or admins) can modify
     permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def get_queryset(self):
+        """
+        Optionally restricts the returned products to a given category,
+        by filtering against a `category` query parameter in the URL.
+        """
+        queryset = Product.objects.all()
+        category = self.request.query_params.get('category', None)
+        if category is not None:
+            queryset = queryset.filter(category=category)
+        return queryset
 
 
 class FeaturedSerializer(serializers.ModelSerializer):

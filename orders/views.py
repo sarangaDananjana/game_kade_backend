@@ -1,4 +1,5 @@
-from rest_framework import viewsets, serializers
+from rest_framework import viewsets, serializers, status
+from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db import models
 from .models import OrderLocation, Order, OrderItem
@@ -73,3 +74,26 @@ class OrderViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         # Users can only view their own orders, ordered by newest first
         return Order.objects.filter(user=self.request.user).order_by('-created_at')
+
+    def update(self, request, *args, **kwargs):
+        """
+        PUT /api/orders/{id}/
+        We override the default update method so that this endpoint is strictly
+        used for cancelling an order by the user.
+        """
+        order = self.get_object()
+
+        # Prevent cancelling orders that are already being prepared or delivered
+        if order.status != 'pending':
+            return Response(
+                {'error': 'Only pending orders can be cancelled.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Update status to cancelled
+        order.status = 'cancelled'
+        order.save()
+
+        # Return the updated order details
+        serializer = self.get_serializer(order)
+        return Response(serializer.data, status=status.HTTP_200_OK)

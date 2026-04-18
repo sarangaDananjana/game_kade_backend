@@ -4,11 +4,12 @@ from .models import Product, Featured
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ('name', 'price', 'stock_quantity',
-                    'is_available', 'created_at')
-    list_filter = ('is_available', 'created_at')
+    # 'category' added to display columns and the right-side filter sidebar
+    list_display = ('name', 'category', 'price',
+                    'stock_quantity', 'is_available', 'created_at')
+    list_filter = ('category', 'is_available', 'created_at')
     search_fields = ('name', 'description')
-    # Allows quick editing from the list view!
+    # Allows quick editing from the list view
     list_editable = ('price', 'stock_quantity', 'is_available')
 
 
