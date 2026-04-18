@@ -107,3 +107,8 @@ class VerifyOTPView(APIView):
 def home_view(request):
     # Instead of HttpResponse("Hello World..."), we render the template
     return render(request, 'index.html')
+
+
+def privacy_policy_view(request):
+    # Instead of HttpResponse("Hello World..."), we render the template
+    return render(request, 'privacy-policy.html')

@@ -25,6 +25,7 @@ urlpatterns = [
     # Include users app URLs under the /api/auth/ prefix
     path('api/auth/', include('users.urls')),
     path('', views.home_view, name="home"),
+    path('privacy-policy/', views.privacy_policy_view, name="privacy-policy"),
     path('api/products/', include('products.urls')),
     path('api/orders/', include('orders.urls')),
 ]
