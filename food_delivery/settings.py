@@ -34,7 +34,10 @@ SECRET_KEY = 'django-insecure-&%-=qsm9k7e0+2@0lnz(#nw31v2gl_v2lt^k-642_25d^l7fk@
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['47.236.50.0']
+ALLOWED_HOSTS = ['47.236.50.0', 'mealdrop.shop', 'www.mealdrop.shop']
+
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+CSRF_TRUSTED_ORIGINS = ['https://mealdrop.shop', 'https://www.mealdrop.shop']
 
 
 # Application definition
