@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Delete Account - Meal Drop</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gray-50 flex items-center justify-center min-h-screen p-4">
+
+    <div class="max-w-md w-full bg-white rounded-xl shadow-lg p-8 border border-gray-100">
+        <div class="text-center mb-8">
+            <h1 class="text-2xl font-bold text-gray-900 mb-2">Delete Your Account</h1>
+            <p class="text-gray-500 text-sm">To permanently delete your account and all associated data (orders,
+                locations), please verify your identity.</p>
+        </div>
+
+        <!-- Step 1: Phone Number -->
+        <div id="step-1">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
+            <input type="text" id="phone" placeholder="0771234567"
+                class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition mb-4">
+            <button onclick="sendOtp()" id="btn-send"
+                class="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-3 rounded-lg transition">
+                Send OTP
+            </button>
+            <p id="error-1" class="text-red-500 text-sm mt-2 hidden"></p>
+        </div>
+
+        <!-- Step 2: OTP Verification & Deletion -->
+        <div id="step-2" class="hidden">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Enter OTP</label>
+            <input type="text" id="otp" placeholder="123456"
+                class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition mb-4">
+            <button onclick="verifyAndDelete()" id="btn-delete"
+                class="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-3 rounded-lg transition">
+                Verify & Permanently Delete
+            </button>
+            <p id="error-2" class="text-red-500 text-sm mt-2 hidden"></p>
+        </div>
+
+        <!-- Step 3: Success -->
+        <div id="step-3" class="hidden text-center py-6">
+            <svg class="w-16 h-16 text-green-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <h2 class="text-xl font-bold text-gray-900 mb-2">Account Deleted</h2>
+            <p class="text-gray-500">Your account and all personal data have been completely removed from our servers.
+            </p>
+        </div>
+    </div>
+
+    <script>
+        const baseUrl = window.location.origin; // Dynamically gets your domain
+        let userPhone = "";
+
+        async function sendOtp() {
+            const phoneInput = document.getElementById('phone').value;
+            const errorMsg = document.getElementById('error-1');
+            const btn = document.getElementById('btn-send');
+
+            if (!phoneInput) {
+                errorMsg.innerText = "Please enter your phone number.";
+                errorMsg.classList.remove('hidden');
+                return;
+            }
+
+            errorMsg.classList.add('hidden');
+            btn.innerText = "Sending...";
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(`${baseUrl}/api/auth/send-otp/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone_number: phoneInput })
+                });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    userPhone = phoneInput;
+                    document.getElementById('step-1').classList.add('hidden');
+                    document.getElementById('step-2').classList.remove('hidden');
+                } else {
+                    throw new Error(data.error || "Failed to send OTP.");
+                }
+            } catch (err) {
+                errorMsg.innerText = err.message;
+                errorMsg.classList.remove('hidden');
+                btn.innerText = "Send OTP";
+                btn.disabled = false;
+            }
+        }
+
+        async function verifyAndDelete() {
+            const otpInput = document.getElementById('otp').value;
+            const errorMsg = document.getElementById('error-2');
+            const btn = document.getElementById('btn-delete');
+
+            if (!otpInput) return;
+
+            errorMsg.classList.add('hidden');
+            btn.innerText = "Deleting...";
+            btn.disabled = true;
+
+            try {
+                // 1. Verify OTP to get Access Token
+                const loginRes = await fetch(`${baseUrl}/api/auth/verify-otp/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone_number: userPhone, otp_code: otpInput })
+                });
+
+                const loginData = await loginRes.json();
+
+                if (!loginRes.ok) throw new Error(loginData.error || "Invalid OTP.");
+
+                const token = loginData.access;
+
+                // 2. Use Token to Delete Account
+                const delRes = await fetch(`${baseUrl}/api/auth/delete-account/`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (delRes.ok) {
+                    document.getElementById('step-2').classList.add('hidden');
+                    document.getElementById('step-3').classList.remove('hidden');
+                } else {
+                    throw new Error("Failed to delete account. Please try again.");
+                }
+
+            } catch (err) {
+                errorMsg.innerText = err.message;
+                errorMsg.classList.remove('hidden');
+                btn.innerText = "Verify & Permanently Delete";
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+
+</html>

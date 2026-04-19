@@ -3,6 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.permissions import IsAuthenticated
 from .models import CustomUser, OTP
 from .utils import generate_otp_code, send_otp_sms
 
@@ -104,6 +105,18 @@ class VerifyOTPView(APIView):
         }, status=status.HTTP_200_OK)
 
 
+class DeleteAccountView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request):
+        user = request.user
+        # Deleting the user will cascade and permanently delete their OTPs, Orders, and OrderLocations
+        user.delete()
+        return Response({
+            'message': 'Your account and all associated data have been permanently deleted.'
+        }, status=status.HTTP_200_OK)
+
+
 def home_view(request):
     # Instead of HttpResponse("Hello World..."), we render the template
     return render(request, 'index.html')
@@ -112,3 +125,7 @@ def home_view(request):
 def privacy_policy_view(request):
     # Instead of HttpResponse("Hello World..."), we render the template
     return render(request, 'privacy-policy.html')
+
+
+def delete_account_view(request):
+    return render(request, 'account-delete.html')

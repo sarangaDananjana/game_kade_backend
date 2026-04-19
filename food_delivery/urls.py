@@ -26,6 +26,7 @@ urlpatterns = [
     path('api/auth/', include('users.urls')),
     path('', views.home_view, name="home"),
     path('privacy-policy/', views.privacy_policy_view, name="privacy-policy"),
+    path('delete-account/', views.delete_account_view, name='delete_account'),
     path('api/products/', include('products.urls')),
     path('api/orders/', include('orders.urls')),
 ]
