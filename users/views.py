@@ -12,6 +12,12 @@ class SendOTPView(APIView):
     def post(self, request):
         phone_number = request.data.get('phone_number')
         name = request.data.get('name')
+        # NEW: Extract the role from the request, default to 'customer' if missing
+        role = request.data.get('role', 'customer')
+
+        # Security check: Ensure they don't try to pass 'admin' or something invalid
+        if role not in ['customer', 'rider']:
+            role = 'customer'
 
         if not phone_number:
             return Response({'error': 'Phone number is required.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -22,8 +28,8 @@ class SendOTPView(APIView):
         if not user:
             # NEW USER FLOW
             if not name:
-                # Create the user in the database, but ask for the name before sending OTP
-                CustomUser.objects.create(phone_number=phone_number)
+                # Create the user in the database, assigning the requested role
+                CustomUser.objects.create(phone_number=phone_number, role=role)
                 return Response({
                     'is_new_user': True,
                     'message': 'User created. Please provide your name to receive OTP.'
@@ -31,7 +37,7 @@ class SendOTPView(APIView):
             else:
                 # If they somehow passed the name on the first try, create them completely
                 user = CustomUser.objects.create(
-                    phone_number=phone_number, name=name)
+                    phone_number=phone_number, name=name, role=role)
         else:
             # EXISTING USER FLOW
             if not user.name and not name:
@@ -109,6 +115,7 @@ class VerifyOTPView(APIView):
             'message': 'Login successful.',
             'access': str(refresh.access_token),
             'refresh': str(refresh),
+            'role': user.role  # NEW: Send role back to frontend so they know who logged in
         }, status=status.HTTP_200_OK)
 
 
@@ -125,12 +132,10 @@ class DeleteAccountView(APIView):
 
 
 def home_view(request):
-    # Instead of HttpResponse("Hello World..."), we render the template
     return render(request, 'index.html')
 
 
 def privacy_policy_view(request):
-    # Instead of HttpResponse("Hello World..."), we render the template
     return render(request, 'privacy-policy.html')
 
 
