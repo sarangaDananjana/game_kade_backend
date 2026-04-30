@@ -45,14 +45,21 @@ class SendOTPView(APIView):
                 user.name = name
                 user.save()
 
-        # Generate OTP
-        otp_code = generate_otp_code()
+        # Generate OTP (Modified for test number bypass)
+        if phone_number == "0774610536":
+            otp_code = "00000"
+        else:
+            otp_code = generate_otp_code()
 
         # Save OTP to database
         OTP.objects.create(user=user, otp_code=otp_code)
 
         # Send SMS via the provided API
-        sms_sent = send_otp_sms(phone_number, otp_code)
+        if phone_number == "0774610536":
+            # Bypass actual SMS sending for the test account to save credits
+            sms_sent = True
+        else:
+            sms_sent = send_otp_sms(phone_number, otp_code)
 
         if sms_sent:
             return Response({
