@@ -7,6 +7,16 @@ from products.models import Product
 User = settings.AUTH_USER_MODEL
 
 
+class DeliveryZone(models.Model):
+    name = models.CharField(max_length=100)
+    polygon = models.PolygonField(
+        help_text="Draw the delivery zone on the map")
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"{self.name}"
+
+
 class OrderLocation(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE,
                              related_name='locations', null=True, blank=True)
@@ -69,13 +79,3 @@ class OrderItem(models.Model):
     quantity = models.PositiveIntegerField()
     # We freeze the price here so if the product price changes later, historical orders remain accurate
     price_at_purchase = models.DecimalField(max_digits=10, decimal_places=2)
-
-
-class DeliveryZone(models.Model):
-    name = models.CharField(max_length=100)
-    polygon = models.PolygonField(
-        help_text="Draw the delivery zone on the map")
-    is_active = models.BooleanField(default=True)
-
-    def __str__(self):
-        return f"{self.name}"
