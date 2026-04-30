@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     # Third party apps
     'rest_framework',
     'rest_framework_simplejwt',
+    'django.contrib.gis',
 
     # Local apps
     'users',
@@ -101,6 +102,7 @@ DATABASES = {
         default=os.environ.get('DATABASE_URL'),
         conn_max_age=600,
         conn_health_checks=True,
+        engine='django.contrib.gis.db.backends.postgis'
     )
 }
 

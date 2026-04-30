@@ -1,5 +1,6 @@
 import requests
 import random
+import os  # <-- Add this
 
 
 def generate_otp_code():
@@ -10,12 +11,14 @@ def generate_otp_code():
 def send_otp_sms(phone, otp_code):
     """Sends OTP using the provided text.lk API"""
     message = f"Your Food Delivery App OTP code is: {otp_code}. It will expire in 5 minutes."
+    api_key = os.environ.get("TEXT_LK_API_KEY")
+
     try:
         response = requests.post(
             "https://app.text.lk/api/v3/sms/send",
             headers={
                 # Note: In production, move this Bearer token to .env
-                "Authorization": "Bearer 319|OAWuEVQ24CJPu7oprqZiplNyErfta1oB5aFvhhiU37ced9f0",
+                "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
                 "Accept": "application/json"
             },

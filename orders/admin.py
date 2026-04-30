@@ -1,5 +1,5 @@
-from django.contrib import admin
-from .models import OrderLocation, Order, OrderItem
+from django.contrib.gis import admin
+from .models import OrderLocation, Order, OrderItem, DeliveryZone
 
 
 @admin.register(OrderLocation)
@@ -27,3 +27,9 @@ class OrderAdmin(admin.ModelAdmin):
     inlines = [OrderItemInline]
     # Quickly change order status from the list view
     list_editable = ('status',)
+
+
+@admin.register(DeliveryZone)
+class DeliveryZoneAdmin(admin.GISModelAdmin):
+    list_display = ('name', 'is_active')
+    search_fields = ('name',)

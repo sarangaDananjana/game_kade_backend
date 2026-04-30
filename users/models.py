@@ -24,12 +24,21 @@ class CustomUserManager(BaseUserManager):
 
 
 class CustomUser(AbstractBaseUser, PermissionsMixin):
+
+    ROLE_CHOICES = (
+        ('customer', 'Customer'),
+        ('rider', 'Rider'),
+        ('admin', 'Admin'),  # Optional, for your backend managers
+    )
+
     phone_number = models.CharField(max_length=15, unique=True)
     name = models.CharField(max_length=255, blank=True, null=True)
     # Set true by default, or false if you want strict verification first
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     date_joined = models.DateTimeField(default=timezone.now)
+    role = models.CharField(
+        max_length=20, choices=ROLE_CHOICES, default='customer')  # <-- NEW FIELD
 
     objects = CustomUserManager()
 
