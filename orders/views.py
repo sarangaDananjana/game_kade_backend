@@ -8,7 +8,8 @@ from .models import OrderLocation, Order, OrderItem, DeliveryZone
 class OrderLocationSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderLocation
-        fields = '__all__'
+        # Exclude the internal PostGIS point field so it doesn't clutter the JSON response
+        exclude = ['location_point']
         # Ensure users can't override these values via the API when creating a location
         read_only_fields = ('user', 'is_system_defined')
 
@@ -50,6 +51,18 @@ class OrderSerializer(serializers.ModelSerializer):
                   'delivery_code', 'created_at', 'items']
         # Read-only so users can't override these on creation
         read_only_fields = ['id', 'status', 'delivery_code', 'created_at']
+
+    def to_representation(self, instance):
+        """
+        NEW: Override how the order is represented as JSON.
+        Instead of returning just "location": 1, we embed the entire OrderLocation JSON.
+        """
+        response = super().to_representation(instance)
+        # Check if a location is attached, then serialize it
+        if instance.location:
+            response['location'] = OrderLocationSerializer(
+                instance.location).data
+        return response
 
     def create(self, validated_data):
         # Extract the nested items data
