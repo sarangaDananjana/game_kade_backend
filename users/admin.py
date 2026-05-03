@@ -1,9 +1,10 @@
 from django.contrib import admin
+from unfold.admin import ModelAdmin
 from .models import CustomUser, OTP
 
 
 @admin.register(CustomUser)
-class CustomUserAdmin(admin.ModelAdmin):
+class CustomUserAdmin(ModelAdmin):
     # Added 'role' to list_display so you can see it at a glance
     list_display = ('phone_number', 'name', 'role',
                     'is_active', 'is_staff', 'date_joined')
@@ -14,7 +15,7 @@ class CustomUserAdmin(admin.ModelAdmin):
 
 
 @admin.register(OTP)
-class OTPAdmin(admin.ModelAdmin):
+class OTPAdmin(ModelAdmin):
     list_display = ('user', 'otp_code', 'is_used', 'created_at', 'is_valid')
     list_filter = ('is_used', 'created_at')
     search_fields = ('user__phone_number', 'otp_code')

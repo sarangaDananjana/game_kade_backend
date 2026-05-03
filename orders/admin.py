@@ -1,9 +1,10 @@
 from django.contrib.gis import admin
+from unfold.admin import ModelAdmin, TabularInline
 from .models import OrderLocation, Order, OrderItem, DeliveryZone
 
 
 @admin.register(OrderLocation)
-class OrderLocationAdmin(admin.ModelAdmin):
+class OrderLocationAdmin(ModelAdmin):
     list_display = ('name', 'user', 'unique_identity', 'is_system_defined')
     list_filter = ('is_system_defined',)
     search_fields = ('name', 'description', 'unique_identity',
@@ -12,14 +13,14 @@ class OrderLocationAdmin(admin.ModelAdmin):
 # This allows you to see and edit the Order Items directly inside the Order page
 
 
-class OrderItemInline(admin.TabularInline):
+class OrderItemInline(TabularInline):
     model = OrderItem
     extra = 0
     readonly_fields = ('price_at_purchase',)
 
 
 @admin.register(Order)
-class OrderAdmin(admin.ModelAdmin):
+class OrderAdmin(ModelAdmin):
     list_display = ('id', 'user', 'status', 'total_amount', 'created_at')
     list_filter = ('status', 'created_at')
     search_fields = ('user__phone_number', 'user__name', 'delivery_code')

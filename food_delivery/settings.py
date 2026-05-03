@@ -43,6 +43,7 @@ CSRF_TRUSTED_ORIGINS = ['https://mealdrop.shop', 'https://www.mealdrop.shop']
 # Application definition
 
 INSTALLED_APPS = [
+    'unfold',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -140,6 +141,10 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')  # <-- ADD THIS LINE
 
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, 'static'),
+]
+
 # Media files configuration (for uploading Product images)
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
@@ -162,4 +167,20 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
     'USER_ID_FIELD': 'id',
     'USER_ID_CLAIM': 'user_id',
+}
+
+from django.templatetags.static import static
+
+UNFOLD = {
+    "SITE_TITLE": "Game Kade Admin",
+    "SITE_HEADER": "Game Kade",
+    "SITE_URL": "/",
+    "SITE_ICON": {
+        "light": lambda request: static("img/logo.jpeg"),
+        "dark": lambda request: static("img/logo.jpeg"),
+    },
+    "SITE_LOGO": {
+        "light": lambda request: static("img/logo.jpeg"),
+        "dark": lambda request: static("img/logo.jpeg"),
+    },
 }
