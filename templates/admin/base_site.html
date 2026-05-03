@@ -1,0 +1,114 @@
+{% extends "admin/base.html" %}
+{% load static %}
+
+{% block title %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block extrastyle %}
+    {{ block.super }}
+    <style>
+        /* Modernize fonts */
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f8fafc;
+        }
+
+        /* Modernize header */
+        #header {
+            background-color: #1e293b; /* modern dark slate */
+            color: #ffffff;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Branding area styling */
+        #branding {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        #branding h1 {
+            margin: 0;
+            color: #ffffff;
+            font-weight: 600;
+        }
+
+        .custom-logo {
+            height: 40px;
+            width: auto;
+            border-radius: 8px; /* slight curve for the logo */
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            object-fit: contain;
+            background: #ffffff;
+        }
+
+        /* Modernize buttons */
+        .button, input[type=submit], input[type=button], .submit-row input, a.button {
+            background-color: #0f172a;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: background-color 0.2s;
+            border: none;
+        }
+        
+        .button:hover, input[type=submit]:hover, input[type=button]:hover, .submit-row input:hover, a.button:hover {
+            background-color: #334155;
+        }
+        .button.default, input[type=submit].default, .submit-row input.default {
+            background-color: #dc2626; /* Using a subtle red accent that fits "Game Kade" styling if any */
+        }
+        .button.default:hover, input[type=submit].default:hover, .submit-row input.default:hover {
+            background-color: #b91c1c;
+        }
+
+        /* Modernize content modules (cards) */
+        #content-main .module {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        #content-main .module h2, .module caption, .inline-group h2 {
+            background: #f1f5f9;
+            color: #334155;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 10px 15px;
+            font-weight: 600;
+        }
+
+        /* Modernize login box */
+        .login #container {
+            border-radius: 12px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e2e8f0;
+            background: #ffffff;
+            margin-top: 10vh;
+            overflow: hidden;
+            max-width: 400px;
+        }
+        .login #header {
+            border-radius: 12px 12px 0 0;
+            padding: 20px;
+            justify-content: center;
+        }
+        .login #branding {
+            justify-content: center;
+        }
+        .login .form-row {
+            border: none;
+            padding: 15px 20px;
+        }
+        .login .submit-row {
+            padding: 15px 20px 20px;
+            border: none;
+        }
+    </style>
+{% endblock %}
+
+{% block branding %}
+<div id="branding">
+    <img src="{% static 'img/logo.jpeg' %}" alt="ගමේ කඩේ Logo" class="custom-logo">
+    <h1 id="site-name"><a href="{% url 'admin:index' %}">{{ site_header|default:_('Django administration') }}</a></h1>
+</div>
+{% endblock %}

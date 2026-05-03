@@ -20,6 +20,10 @@ from django.conf import settings
 from django.conf.urls.static import static
 from users import views
 
+admin.site.site_header = "ගමේ කඩේ Administration panel"
+admin.site.site_title = "ගමේ කඩේ Admin"
+admin.site.index_title = "Welcome to ගමේ කඩේ Backend"
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     # Include users app URLs under the /api/auth/ prefix
