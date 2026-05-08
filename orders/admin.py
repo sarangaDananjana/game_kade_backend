@@ -1,4 +1,7 @@
 from django.contrib.gis import admin
+from django.urls import path
+from django.core.serializers import serialize
+from django.template.response import TemplateResponse
 from .models import OrderLocation, Order, OrderItem, DeliveryZone
 
 
@@ -33,3 +36,29 @@ class OrderAdmin(admin.ModelAdmin):
 class DeliveryZoneAdmin(admin.GISModelAdmin):
     list_display = ('name', 'is_active')
     search_fields = ('name',)
+
+    gis_widget_kwargs = {
+        'attrs': {
+            'default_lon': 80.5760,
+            'default_lat': 5.9396,
+            'default_zoom': 13,
+        }
+    }
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('combined-map/', self.admin_site.admin_view(self.combined_map_view), name='orders_deliveryzone_combined_map'),
+        ]
+        return custom_urls + urls
+
+    def combined_map_view(self, request):
+        zones = DeliveryZone.objects.filter(is_active=True)
+        geojson = serialize('geojson', zones, geometry_field='polygon', fields=('name',))
+        
+        context = dict(
+            self.admin_site.each_context(request),
+            geojson=geojson,
+            title="Combined Delivery Zones",
+        )
+        return TemplateResponse(request, "admin/deliveryzone_combined_map.html", context)

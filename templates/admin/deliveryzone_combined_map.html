@@ -1,0 +1,50 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+    #map { height: 600px; width: 100%; margin-top: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+    <div style="margin-bottom: 20px;">
+        <a href="../" class="button">&larr; Back to Delivery Zones</a>
+    </div>
+    <div id="map"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // Matara, University of Ruhuna coordinates
+        var map = L.map('map').setView([5.9396, 80.5760], 13);
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        var geojsonFeature = {{ geojson|safe }};
+        
+        L.geoJSON(geojsonFeature, {
+            onEachFeature: function (feature, layer) {
+                if (feature.properties && feature.properties.name) {
+                    layer.bindPopup("<b>" + feature.properties.name + "</b>");
+                }
+            },
+            style: function(feature) {
+                return {
+                    color: "#ff7800",
+                    weight: 2,
+                    opacity: 0.8,
+                    fillOpacity: 0.35
+                };
+            }
+        }).addTo(map);
+    });
+</script>
+{% endblock %}

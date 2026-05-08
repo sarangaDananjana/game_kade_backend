@@ -24,7 +24,7 @@ def send_otp_sms(phone, otp_code):
             },
             json={
                 "recipient": phone,
-                "sender_id": "TextLKDemo",
+                "sender_id": "One Mind",
                 "type": "plain",
                 "message": message
             },
