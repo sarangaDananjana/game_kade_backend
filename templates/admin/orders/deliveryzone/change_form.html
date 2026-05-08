@@ -1,0 +1,80 @@
+{% extends "admin/change_form.html" %}
+
+{% block after_field_sets %}
+{{ block.super }}
+<script>
+    window.addEventListener('load', function() {
+        // We wait a bit to ensure the map is initialized by Django's OpenLayers script
+        var checkMapInterval = setInterval(function() {
+            if (typeof geodjango_polygon !== 'undefined' && geodjango_polygon.map) {
+                clearInterval(checkMapInterval);
+                var map = geodjango_polygon.map;
+
+                // 1. Render existing delivery zones
+                var geojsonStr = '{{ existing_zones_geojson|escapejs }}';
+                if (geojsonStr && geojsonStr !== '""') {
+                    var geojson = JSON.parse(geojsonStr);
+                    var geojsonFormat = new ol.format.GeoJSON();
+                    var vectorSource = new ol.source.Vector({
+                        features: geojsonFormat.readFeatures(geojson, {
+                            featureProjection: 'EPSG:3857' // OpenLayers uses EPSG:3857 for map projection
+                        })
+                    });
+                    var vectorLayer = new ol.layer.Vector({
+                        source: vectorSource,
+                        style: new ol.style.Style({
+                            stroke: new ol.style.Stroke({
+                                color: '#ff7800',
+                                width: 2
+                            }),
+                            fill: new ol.style.Fill({
+                                color: 'rgba(255, 120, 0, 0.2)'
+                            })
+                        })
+                    });
+                    map.addLayer(vectorLayer);
+                }
+
+                // 2. Render 3.2KM radius circle from lat=5.938075, lng=80.581056
+                var centerLonLat = [80.581056, 5.938075];
+                // Create a circular polygon: ol.geom.Polygon.circular(sphere, center, radius, opt_n)
+                // In ol 6+, we can just use ol.geom.Polygon.circular(sphere, center, radius) where sphere is WGS84 by default, or just use center and radius depending on the ol version.
+                // It's safer to use the standard signature: ol.geom.Polygon.circular([lon, lat], radius_in_meters, num_points)
+                var circleGeom;
+                try {
+                    // Try OpenLayers 6+ signature
+                    circleGeom = ol.geom.Polygon.circular(centerLonLat, 3200, 64);
+                } catch(e) {
+                    // Fallback to older OpenLayers signature just in case
+                    circleGeom = ol.geom.Polygon.circular(new ol.Sphere(6378137), centerLonLat, 3200, 64);
+                }
+                
+                var circleFeature = new ol.Feature(circleGeom.transform('EPSG:4326', 'EPSG:3857'));
+                
+                var circleSource = new ol.source.Vector({
+                    features: [circleFeature]
+                });
+                var circleLayer = new ol.layer.Vector({
+                    source: circleSource,
+                    style: new ol.style.Style({
+                        stroke: new ol.style.Stroke({
+                            color: 'blue',
+                            width: 2,
+                            lineDash: [5, 5]
+                        }),
+                        fill: new ol.style.Fill({
+                            color: 'rgba(0, 0, 255, 0.1)'
+                        })
+                    })
+                });
+                map.addLayer(circleLayer);
+            }
+        }, 500); // Check every 500ms
+        
+        // Stop checking after 10 seconds to avoid infinite loops if something goes wrong
+        setTimeout(function() {
+            clearInterval(checkMapInterval);
+        }, 10000);
+    });
+</script>
+{% endblock %}

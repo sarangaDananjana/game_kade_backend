@@ -62,3 +62,15 @@ class DeliveryZoneAdmin(admin.GISModelAdmin):
             title="Combined Delivery Zones",
         )
         return TemplateResponse(request, "admin/deliveryzone_combined_map.html", context)
+
+    def change_view(self, request, object_id, form_url='', extra_context=None):
+        extra_context = extra_context or {}
+        zones = DeliveryZone.objects.filter(is_active=True).exclude(pk=object_id)
+        extra_context['existing_zones_geojson'] = serialize('geojson', zones, geometry_field='polygon', fields=('name',))
+        return super().change_view(request, object_id, form_url, extra_context=extra_context)
+
+    def add_view(self, request, form_url='', extra_context=None):
+        extra_context = extra_context or {}
+        zones = DeliveryZone.objects.filter(is_active=True)
+        extra_context['existing_zones_geojson'] = serialize('geojson', zones, geometry_field='polygon', fields=('name',))
+        return super().add_view(request, form_url, extra_context=extra_context)
