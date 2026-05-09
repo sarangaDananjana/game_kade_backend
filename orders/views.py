@@ -1,7 +1,10 @@
 from rest_framework import viewsets, serializers, status
 from django.contrib.gis.db import models
+from django.contrib.gis.geos import Polygon
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from django.views.generic import TemplateView
+from django.conf import settings
 from .models import OrderLocation, Order, OrderItem, DeliveryZone
 
 
@@ -172,3 +175,63 @@ class RiderOrderViewSet(viewsets.ModelViewSet):
         order.save()
 
         return Response(self.get_serializer(order).data)
+
+
+##################################################################################### Delivery Zone API & Views ###############################################################
+
+class DeliveryZoneSerializer(serializers.ModelSerializer):
+    # To handle Polygon to GeoJSON and vice versa manually since we don't have rest_framework_gis
+    coordinates = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DeliveryZone
+        fields = ['id', 'name', 'is_active', 'is_primary', 'coordinates']
+
+    def get_coordinates(self, obj):
+        if obj.polygon:
+            # Returns a list of coordinates. E.g. ((x,y), (x,y), (x,y))
+            # Convert to list of dicts for frontend {lat: y, lng: x}
+            coords = obj.polygon.coords[0] # assuming single outer polygon
+            return [{"lat": c[1], "lng": c[0]} for c in coords]
+        return []
+
+
+class DeliveryZoneViewSet(viewsets.ModelViewSet):
+    queryset = DeliveryZone.objects.all()
+    serializer_class = DeliveryZoneSerializer
+    permission_classes = [AllowAny]  # No auth for now, as requested
+
+    def create(self, request, *args, **kwargs):
+        data = request.data
+        name = data.get('name')
+        is_primary = data.get('is_primary', False)
+        coords_data = data.get('coordinates', []) 
+        
+        if coords_data and len(coords_data) >= 3:
+            # coords_data expects: [{"lat": x, "lng": y}, ...]
+            # Polygon expects list of (lng, lat) tuples
+            poly_coords = [(c['lng'], c['lat']) for c in coords_data]
+            
+            # Close the polygon if not closed
+            if poly_coords[0] != poly_coords[-1]:
+                poly_coords.append(poly_coords[0])
+                
+            polygon = Polygon(poly_coords)
+            
+            # If this is marked as primary, un-mark existing primary zones
+            if is_primary:
+                DeliveryZone.objects.filter(is_primary=True).update(is_primary=False)
+                
+            zone = DeliveryZone.objects.create(name=name, polygon=polygon, is_primary=is_primary)
+            return Response(DeliveryZoneSerializer(zone).data, status=status.HTTP_201_CREATED)
+            
+        return Response({'error': 'Invalid coordinates provided. Must provide at least 3 points.'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class DeliveryZoneAdminView(TemplateView):
+    template_name = 'orders/delivery_zone_map.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['google_maps_api_key'] = getattr(settings, 'GOOGLE_MAPS_API_KEY', '')
+        return context

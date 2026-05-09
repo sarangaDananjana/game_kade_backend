@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Delivery Zone Admin</title>
+    <!-- Add Bootstrap for some quick styling -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        #map {
+            height: 80vh;
+            width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .sidebar {
+            height: 80vh;
+            overflow-y: auto;
+        }
+        .zone-card {
+            border-left: 4px solid #6c757d;
+            margin-bottom: 10px;
+        }
+        .zone-card.primary {
+            border-left-color: #0d6efd;
+            background-color: #f8f9fa;
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+<div class="container-fluid mt-4">
+    <div class="row">
+        <!-- Sidebar for Controls -->
+        <div class="col-md-3 sidebar">
+            <h3 class="mb-4">Delivery Zones</h3>
+            
+            <div class="card mb-4 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Draw New Zone</h5>
+                    <p class="text-muted small">Use the polygon tool on the map to draw a new delivery zone.</p>
+                    
+                    <form id="saveZoneForm" style="display: none;">
+                        <div class="mb-3">
+                            <label for="zoneName" class="form-label">Zone Name</label>
+                            <input type="text" class="form-control" id="zoneName" required>
+                        </div>
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="isPrimary">
+                            <label class="form-check-label" for="isPrimary">Set as Primary Zone</label>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">Save Zone</button>
+                        <button type="button" class="btn btn-secondary w-100 mt-2" id="cancelDrawBtn">Cancel</button>
+                    </form>
+                </div>
+            </div>
+
+            <div id="existingZonesList">
+                <h5 class="mb-3">Existing Zones</h5>
+                <!-- Populated via JS -->
+                <div class="text-center" id="zonesLoading">
+                    <div class="spinner-border spinner-border-sm text-primary" role="status"></div> Loading...
+                </div>
+            </div>
+        </div>
+
+        <!-- Map Container -->
+        <div class="col-md-9">
+            <div id="map"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let map;
+    let drawingManager;
+    let currentDrawing = null;
+    let existingPolygons = [];
+
+    // Initialize Map
+    function initMap() {
+        // Default to Colombo, Sri Lanka roughly
+        map = new google.maps.Map(document.getElementById("map"), {
+            center: { lat: 6.9271, lng: 79.8612 },
+            zoom: 12,
+        });
+
+        drawingManager = new google.maps.drawing.DrawingManager({
+            drawingMode: null, // start without drawing mode enabled
+            drawingControl: true,
+            drawingControlOptions: {
+                position: google.maps.ControlPosition.TOP_CENTER,
+                drawingModes: [google.maps.drawing.OverlayType.POLYGON],
+            },
+            polygonOptions: {
+                fillColor: "#FF0000",
+                fillOpacity: 0.3,
+                strokeWeight: 2,
+                clickable: false,
+                editable: true,
+                zIndex: 1,
+            },
+        });
+
+        drawingManager.setMap(map);
+
+        google.maps.event.addListener(drawingManager, 'polygoncomplete', function (polygon) {
+            // Only allow one drawing at a time
+            if (currentDrawing) {
+                currentDrawing.setMap(null);
+            }
+            currentDrawing = polygon;
+            
+            // Switch back to hand tool
+            drawingManager.setDrawingMode(null);
+            
+            // Show the save form
+            document.getElementById('saveZoneForm').style.display = 'block';
+        });
+
+        // Load existing zones
+        fetchZones();
+    }
+
+    document.getElementById('cancelDrawBtn').addEventListener('click', () => {
+        if (currentDrawing) {
+            currentDrawing.setMap(null);
+            currentDrawing = null;
+        }
+        document.getElementById('saveZoneForm').style.display = 'none';
+        document.getElementById('saveZoneForm').reset();
+    });
+
+    document.getElementById('saveZoneForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        if (!currentDrawing) return;
+
+        const path = currentDrawing.getPath();
+        const coordinates = [];
+        for (let i = 0; i < path.getLength(); i++) {
+            const point = path.getAt(i);
+            coordinates.push({ lat: point.lat(), lng: point.lng() });
+        }
+
+        const payload = {
+            name: document.getElementById('zoneName').value,
+            is_primary: document.getElementById('isPrimary').checked,
+            coordinates: coordinates
+        };
+
+        try {
+            const response = await fetch('/api/orders/delivery-zones/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    // Assuming no CSRF needed for simple API without session auth for now
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (response.ok) {
+                alert('Zone saved successfully!');
+                document.getElementById('saveZoneForm').style.display = 'none';
+                document.getElementById('saveZoneForm').reset();
+                currentDrawing.setMap(null);
+                currentDrawing = null;
+                fetchZones(); // Refresh the list and map
+            } else {
+                const data = await response.json();
+                alert('Failed to save: ' + JSON.stringify(data));
+            }
+        } catch (error) {
+            alert('Error: ' + error);
+        }
+    });
+
+    async function fetchZones() {
+        try {
+            const response = await fetch('/api/orders/delivery-zones/');
+            const zones = await response.json();
+            
+            const listEl = document.getElementById('existingZonesList');
+            listEl.innerHTML = '<h5 class="mb-3">Existing Zones</h5>';
+
+            // Clear old polygons from map
+            existingPolygons.forEach(p => p.setMap(null));
+            existingPolygons = [];
+
+            if (zones.length === 0) {
+                listEl.innerHTML += '<p class="text-muted">No zones defined yet.</p>';
+                return;
+            }
+
+            zones.forEach(zone => {
+                // Add to Sidebar
+                const isPrimary = zone.is_primary;
+                const card = document.createElement('div');
+                card.className = `card zone-card ${isPrimary ? 'primary' : ''}`;
+                card.innerHTML = `
+                    <div class="card-body py-2 px-3">
+                        <strong class="d-block">${zone.name}</strong>
+                        <small class="text-muted">
+                            ${isPrimary ? '<span class="badge bg-primary">Primary</span>' : 'Standard'}
+                            ${zone.is_active ? '' : '<span class="badge bg-danger">Inactive</span>'}
+                        </small>
+                    </div>
+                `;
+                listEl.appendChild(card);
+
+                // Add to Map
+                if (zone.coordinates && zone.coordinates.length > 0) {
+                    const poly = new google.maps.Polygon({
+                        paths: zone.coordinates,
+                        strokeColor: isPrimary ? "#0d6efd" : "#6c757d",
+                        strokeOpacity: 0.8,
+                        strokeWeight: isPrimary ? 3 : 2,
+                        fillColor: isPrimary ? "#0d6efd" : "#6c757d",
+                        fillOpacity: 0.2,
+                        map: map
+                    });
+                    existingPolygons.push(poly);
+                }
+            });
+
+            // Re-center map based on the first zone if exists
+            if (zones.length > 0 && zones[0].coordinates.length > 0) {
+                map.setCenter(zones[0].coordinates[0]);
+            }
+
+        } catch (error) {
+            console.error('Error fetching zones:', error);
+            document.getElementById('zonesLoading').innerText = "Error loading zones.";
+        }
+    }
+</script>
+
+<!-- Load Google Maps JavaScript API -->
+<!-- We pass the dynamic API key from Django context -->
+<script async defer src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&libraries=drawing&callback=initMap"></script>
+</body>
+</html>

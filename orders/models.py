@@ -12,6 +12,7 @@ class DeliveryZone(models.Model):
     polygon = models.PolygonField(
         help_text="Draw the delivery zone on the map")
     is_active = models.BooleanField(default=True)
+    is_primary = models.BooleanField(default=False)
 
     def __str__(self):
         return f"{self.name}"

@@ -11,3 +11,8 @@ services:
     # This command runs migrations and then starts the gunicorn production server
     command: sh -c "python manage.py migrate && gunicorn food_delivery.wsgi:application --bind 0.0.0.0:8000"
     restart: always
+    volumes:
+      - media_data:/app/media
+
+volumes:
+  media_data:

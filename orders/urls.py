@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import OrderLocationViewSet, OrderViewSet, RiderOrderViewSet
+from .views import OrderLocationViewSet, OrderViewSet, RiderOrderViewSet, DeliveryZoneViewSet, DeliveryZoneAdminView
 
 urlpatterns = [
     # Order Locations Endpoints
@@ -34,4 +34,13 @@ urlpatterns = [
          RiderOrderViewSet.as_view({'get': 'list'}), name='rider-orders-list'),
     path('rider/orders/<int:pk>/', RiderOrderViewSet.as_view(
         {'put': 'update', 'patch': 'update'}), name='rider-orders-detail'),
+
+    ###################################################### DELIVERY ZONE MAP APP ############################################################
+    
+    path('delivery-zones/', DeliveryZoneViewSet.as_view({
+        'get': 'list',
+        'post': 'create'
+    }), name='delivery-zones-list'),
+    
+    path('admin/delivery-zones/map/', DeliveryZoneAdminView.as_view(), name='delivery-zone-map-admin'),
 ]
