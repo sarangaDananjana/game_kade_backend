@@ -19,7 +19,6 @@ from dotenv import load_dotenv
 
 # Load environment variables from .env file and .env.prod
 load_dotenv()
-load_dotenv('.env.prod')
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
