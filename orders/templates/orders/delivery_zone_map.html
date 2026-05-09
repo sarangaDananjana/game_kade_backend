@@ -79,10 +79,23 @@
 
     // Initialize Map
     function initMap() {
-        // Default to Colombo, Sri Lanka roughly
+        const shopLocation = { lat: 5.938075, lng: 80.581056 };
+        
         map = new google.maps.Map(document.getElementById("map"), {
-            center: { lat: 6.9271, lng: 79.8612 },
-            zoom: 12,
+            center: shopLocation,
+            zoom: 14,
+        });
+
+        // Add a pretty shop marker
+        new google.maps.Marker({
+            position: shopLocation,
+            map: map,
+            title: "ගමේ කඩේ (Shop)",
+            icon: {
+                url: "https://maps.google.com/mapfiles/ms/icons/store-locator.png", // Or any custom URL
+                scaledSize: new google.maps.Size(32, 32)
+            },
+            animation: google.maps.Animation.DROP
         });
 
         drawingManager = new google.maps.drawing.DrawingManager({
@@ -223,10 +236,7 @@
                 }
             });
 
-            // Re-center map based on the first zone if exists
-            if (zones.length > 0 && zones[0].coordinates.length > 0) {
-                map.setCenter(zones[0].coordinates[0]);
-            }
+            // Map stays centered on the shop location as defined in initMap()
 
         } catch (error) {
             console.error('Error fetching zones:', error);
