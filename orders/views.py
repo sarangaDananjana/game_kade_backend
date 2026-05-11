@@ -7,6 +7,12 @@ from django.views.generic import TemplateView
 from django.conf import settings
 from .models import OrderLocation, Order, OrderItem, DeliveryZone
 
+import pytz
+from django.utils import timezone
+from rest_framework.views import APIView
+from django.db.models import Sum, F
+from users.models import CustomUser
+
 
 class OrderLocationSerializer(serializers.ModelSerializer):
     class Meta:
@@ -230,6 +236,94 @@ class DeliveryZoneViewSet(viewsets.ModelViewSet):
 
 class DeliveryZoneAdminView(TemplateView):
     template_name = 'orders/delivery_zone_map.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['google_maps_api_key'] = getattr(settings, 'GOOGLE_MAPS_API_KEY', '')
+        return context
+
+
+##################################################################################### Daily Assignment API & Views ###############################################################
+
+class DailySummaryAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        colombo_tz = pytz.timezone('Asia/Colombo')
+        now = timezone.now().astimezone(colombo_tz)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+        summary = OrderItem.objects.filter(
+            order__created_at__range=(today_start, today_end)
+        ).values(
+            product_name=F('product__name')
+        ).annotate(
+            total_quantity=Sum('quantity')
+        ).order_by('-total_quantity')
+
+        return Response(list(summary))
+
+
+class UnassignedOrdersAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        colombo_tz = pytz.timezone('Asia/Colombo')
+        now = timezone.now().astimezone(colombo_tz)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+        orders = Order.objects.filter(
+            created_at__range=(today_start, today_end),
+            rider__isnull=True
+        ).exclude(status__in=['cancelled', 'delivered'])
+        
+        result = []
+        for o in orders:
+            lat = o.location.lat if o.location else None
+            lng = o.location.lng if o.location else None
+            if lat and lng:
+                result.append({
+                    'id': o.id,
+                    'lat': lat,
+                    'lng': lng,
+                    'status': o.status,
+                    'total_amount': o.total_amount,
+                })
+        return Response(result)
+
+
+class BulkAssignRiderAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        rider_id = request.data.get('rider_id')
+        order_ids = request.data.get('order_ids', [])
+
+        if not rider_id or not order_ids:
+            return Response({'error': 'rider_id and order_ids are required.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            rider = CustomUser.objects.get(id=rider_id, role='rider')
+        except CustomUser.DoesNotExist:
+            return Response({'error': 'Invalid rider.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        updated_count = Order.objects.filter(id__in=order_ids).update(rider=rider)
+        
+        return Response({'message': f'Assigned {updated_count} orders to rider.'})
+
+
+class RidersListAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        riders = CustomUser.objects.filter(role='rider', is_active=True).values('id', 'name', 'phone_number')
+        return Response(list(riders))
+
+
+class DailyAssignmentAdminView(TemplateView):
+    template_name = 'orders/daily_assignment.html'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

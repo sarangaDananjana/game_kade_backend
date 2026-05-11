@@ -1,5 +1,8 @@
 from django.urls import path
-from .views import OrderLocationViewSet, OrderViewSet, RiderOrderViewSet, DeliveryZoneViewSet, DeliveryZoneAdminView
+from .views import (
+    OrderLocationViewSet, OrderViewSet, RiderOrderViewSet, DeliveryZoneViewSet, DeliveryZoneAdminView,
+    DailySummaryAPIView, UnassignedOrdersAPIView, BulkAssignRiderAPIView, RidersListAPIView, DailyAssignmentAdminView
+)
 
 urlpatterns = [
     # Order Locations Endpoints
@@ -43,4 +46,12 @@ urlpatterns = [
     }), name='delivery-zones-list'),
     
     path('admin/delivery-zones/map/', DeliveryZoneAdminView.as_view(), name='delivery-zone-map-admin'),
+
+    ###################################################### DAILY ASSIGNMENT MAP APP ############################################################
+    
+    path('daily-summary/', DailySummaryAPIView.as_view(), name='daily-summary'),
+    path('today-unassigned/', UnassignedOrdersAPIView.as_view(), name='today-unassigned'),
+    path('bulk-assign/', BulkAssignRiderAPIView.as_view(), name='bulk-assign'),
+    path('riders/', RidersListAPIView.as_view(), name='riders-list'),
+    path('admin/daily-assignment/map/', DailyAssignmentAdminView.as_view(), name='daily-assignment-admin'),
 ]
