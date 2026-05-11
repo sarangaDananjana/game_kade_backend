@@ -283,7 +283,7 @@ class UnassignedOrdersAPIView(APIView):
         for o in orders:
             lat = o.location.lat if o.location else None
             lng = o.location.lng if o.location else None
-            if lat and lng:
+            if lat is not None and lng is not None:
                 result.append({
                     'id': o.id,
                     'lat': lat,

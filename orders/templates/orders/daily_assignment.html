@@ -316,8 +316,10 @@
                 return;
             }
 
+            console.log("Unassigned orders loaded:", orders);
+
             orders.forEach(order => {
-                const pos = { lat: order.lat, lng: order.lng };
+                const pos = { lat: Number(order.lat), lng: Number(order.lng) };
                 const marker = new google.maps.Marker({
                     position: pos,
                     map: map,
