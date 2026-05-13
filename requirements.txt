@@ -16,3 +16,5 @@ gunicorn>=21.2.0
 pillow==12.2.0
 whitenoise>=6.6.0
 pytz==2024.1
+pymongo>=4.0.0
+dnspython>=2.0.0

@@ -3,8 +3,8 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework.permissions import IsAuthenticated
-from .models import CustomUser, OTP
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from .models import CustomUser, OTP, AppVersion
 from .utils import generate_otp_code, send_otp_sms
 
 
@@ -141,3 +141,16 @@ def privacy_policy_view(request):
 
 def delete_account_view(request):
     return render(request, 'account-delete.html')
+
+
+class AppVersionView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        latest_version = AppVersion.objects.order_by('-version_code').first()
+        if latest_version:
+            return Response({
+                'version_code': latest_version.version_code,
+                'link': latest_version.link
+            }, status=status.HTTP_200_OK)
+        return Response({'error': 'No version information found.'}, status=status.HTTP_404_NOT_FOUND)

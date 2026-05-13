@@ -60,3 +60,12 @@ class OTP(models.Model):
         # OTP expires after 5 minutes
         expiration_time = self.created_at + timezone.timedelta(minutes=5)
         return timezone.now() <= expiration_time and not self.is_used
+
+
+class AppVersion(models.Model):
+    version_code = models.IntegerField(help_text="The internal version code (e.g., 10, 11)")
+    link = models.URLField(help_text="Link to download or view the app update")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Version: {self.version_code}"

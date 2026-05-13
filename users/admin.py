@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import CustomUser, OTP
+from .models import CustomUser, OTP, AppVersion
 
 
 @admin.register(CustomUser)
@@ -19,3 +19,9 @@ class OTPAdmin(admin.ModelAdmin):
     list_filter = ('is_used', 'created_at')
     search_fields = ('user__phone_number', 'otp_code')
     readonly_fields = ('created_at',)
+
+@admin.register(AppVersion)
+class AppVersionAdmin(admin.ModelAdmin):
+    list_display = ('version_code', 'link', 'created_at')
+    search_fields = ('version_code',)
+    ordering = ('-created_at',)

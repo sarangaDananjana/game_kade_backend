@@ -329,3 +329,157 @@ class DailyAssignmentAdminView(TemplateView):
         context = super().get_context_data(**kwargs)
         context['google_maps_api_key'] = getattr(settings, 'GOOGLE_MAPS_API_KEY', '')
         return context
+
+class OptimizeRouteAPIView(APIView):
+    permission_classes = [IsRiderPermission]
+
+    def post(self, request, *args, **kwargs):
+        # 1. Get rider's current lat/lng from request body
+        lat = request.data.get('lat')
+        lng = request.data.get('lng')
+
+        if not lat or not lng:
+            return Response({'error': 'Latitude (lat) and Longitude (lng) are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        origin_str = f"{lat},{lng}"
+
+        # 2. Get today's orders for this rider
+        colombo_tz = pytz.timezone('Asia/Colombo')
+        now = timezone.now().astimezone(colombo_tz)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+        orders = Order.objects.filter(
+            rider=request.user,
+            created_at__range=(today_start, today_end)
+        ).exclude(status__in=['delivered', 'cancelled'])
+
+        if not orders.exists():
+            return Response({'error': 'No active orders found for today.'}, status=status.HTTP_404_NOT_FOUND)
+
+        # 3. Extract coordinates and cluster by identical locations
+        # Dictionary to map "lat,lng" to a list of order IDs
+        location_clusters = {}
+        waypoints = []
+
+        for o in orders:
+            if o.location and o.location.lat is not None and o.location.lng is not None:
+                coord_str = f"{o.location.lat},{o.location.lng}"
+                if coord_str not in location_clusters:
+                    location_clusters[coord_str] = []
+                    waypoints.append(coord_str)
+                location_clusters[coord_str].append(o.id)
+
+        if not waypoints:
+            return Response({'error': 'None of the assigned orders have valid coordinates.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if len(waypoints) > 25:
+            return Response({'error': 'Too many unique waypoints for Google Directions API (max 25).'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 4. Call Google Maps Directions API
+        api_key = getattr(settings, 'GOOGLE_MAPS_API_KEY', '')
+        waypoints_str = "optimize:true|" + "|".join(waypoints)
+        
+        # Set destination=origin to get them back to where they started (round trip)
+        url = "https://maps.googleapis.com/maps/api/directions/json"
+        params = {
+            'origin': origin_str,
+            'destination': origin_str,
+            'waypoints': waypoints_str,
+            'key': api_key
+        }
+
+        import requests
+        try:
+            response = requests.get(url, params=params)
+            response.raise_for_status()
+            data = response.json()
+        except Exception as e:
+            return Response({'error': f"Failed to reach Google Maps API: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        if data.get('status') != 'OK':
+            return Response({'error': f"Google Maps API error: {data.get('status')} - {data.get('error_message', '')}"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 5. Extract optimized sequence
+        waypoint_order = data['routes'][0].get('waypoint_order', [])
+        
+        # Build route_points array with ranks
+        route_points = []
+        for optimized_rank, original_index in enumerate(waypoint_order):
+            coord_str = waypoints[original_index]
+            order_ids = location_clusters[coord_str]
+            # All orders at this coordinate share the same rank
+            for order_id in order_ids:
+                lat_str, lng_str = coord_str.split(',')
+                route_points.append({
+                    'order_id': order_id,
+                    'lat': float(lat_str),
+                    'lng': float(lng_str),
+                    'rank': optimized_rank + 1
+                })
+
+        # 6. Save to MongoDB
+        mongo_uri = getattr(settings, 'MONGO_URI', None)
+        if not mongo_uri:
+            return Response({'error': 'MONGO_URI not configured.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        try:
+            from pymongo import MongoClient
+            client = MongoClient(mongo_uri)
+            db = client['Game_Kade']
+            collection = db['route_states']
+
+            document = {
+                'rider_id': request.user.id,
+                'rider_name': request.user.name,
+                'rider_number': request.user.phone_number,
+                'date': now.strftime('%Y-%m-%d'),
+                'route_points': route_points
+            }
+
+            # Update if exists for this rider and date, otherwise insert
+            result = collection.update_one(
+                {'rider_id': request.user.id, 'date': now.strftime('%Y-%m-%d')},
+                {'$set': document},
+                upsert=True
+            )
+
+            # Retrieve the final document to return (without _id or stringified _id)
+            saved_doc = collection.find_one({'rider_id': request.user.id, 'date': now.strftime('%Y-%m-%d')}, {'_id': 0})
+            
+            return Response(saved_doc, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({'error': f"MongoDB error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class GetOptimizedRouteAPIView(APIView):
+    permission_classes = [IsRiderPermission]
+
+    def get(self, request, *args, **kwargs):
+        colombo_tz = pytz.timezone('Asia/Colombo')
+        now = timezone.now().astimezone(colombo_tz)
+        today_str = now.strftime('%Y-%m-%d')
+
+        mongo_uri = getattr(settings, 'MONGO_URI', None)
+        if not mongo_uri:
+            return Response({'error': 'MONGO_URI not configured.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        try:
+            from pymongo import MongoClient
+            client = MongoClient(mongo_uri)
+            db = client['Game_Kade']
+            collection = db['route_states']
+
+            # Find document for THIS rider and TODAY
+            saved_doc = collection.find_one(
+                {'rider_id': request.user.id, 'date': today_str},
+                {'_id': 0}
+            )
+
+            if not saved_doc:
+                return Response({'error': 'No optimized route found for today.'}, status=status.HTTP_404_NOT_FOUND)
+
+            return Response(saved_doc, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({'error': f"MongoDB error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -1,10 +1,15 @@
 from django.urls import path
 from .views import (
     OrderLocationViewSet, OrderViewSet, RiderOrderViewSet, DeliveryZoneViewSet, DeliveryZoneAdminView,
-    DailySummaryAPIView, UnassignedOrdersAPIView, BulkAssignRiderAPIView, RidersListAPIView, DailyAssignmentAdminView
+    DailySummaryAPIView, UnassignedOrdersAPIView, BulkAssignRiderAPIView, RidersListAPIView, DailyAssignmentAdminView,
+    OptimizeRouteAPIView, GetOptimizedRouteAPIView
 )
 
 urlpatterns = [
+    # Route Optimization Endpoints
+    path('routes/optimize/', OptimizeRouteAPIView.as_view(), name='optimize-route'),
+    path('routes/current/', GetOptimizedRouteAPIView.as_view(), name='get-current-route'),
+
     # Order Locations Endpoints
     path('locations/', OrderLocationViewSet.as_view({
         'get': 'list',

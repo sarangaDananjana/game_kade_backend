@@ -167,3 +167,15 @@ SIMPLE_JWT = {
 
 # Google Maps API Key
 GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY', '')
+
+# MongoDB Configuration
+MONGO_URI = "mongodb+srv://dananjanasaranga:A0763003258z@cluster0.fkjv2k4.mongodb.net/Game_Kade?retryWrites=true&w=majority&appName=Cluster0"
+
+try:
+    from pymongo import MongoClient
+    mongo_client = MongoClient(MONGO_URI)
+    mongo_db = mongo_client['Game_Kade']
+    route_states_collection = mongo_db['OptimizedRoutes']
+except Exception as e:
+    print(f"Failed to connect to MongoDB: {e}")
+
