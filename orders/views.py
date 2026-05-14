@@ -50,6 +50,41 @@ class OrderItemSerializer(serializers.ModelSerializer):
         fields = ['product', 'quantity', 'price_at_purchase']
 
 
+# ─── Rider-specific serializers (do NOT touch user-app serializers above) ───────
+
+class RiderOrderItemSerializer(serializers.ModelSerializer):
+    """Extends the base item serializer to include the human-readable product name."""
+    product_name = serializers.CharField(source='product.name', read_only=True)
+
+    class Meta:
+        model = OrderItem
+        fields = ['product', 'product_name', 'quantity', 'price_at_purchase']
+
+
+class RiderOrderLocationSerializer(serializers.ModelSerializer):
+    """Location serializer for riders — exposes `landmark` instead of the raw `unique_identity` field name."""
+    landmark = serializers.CharField(source='unique_identity', read_only=True)
+
+    class Meta:
+        model = OrderLocation
+        fields = ['id', 'name', 'lat', 'lng', 'description', 'landmark']
+
+
+class RiderOrderSerializer(serializers.ModelSerializer):
+    """Full order serializer for the rider app — includes item names, customer contact, and clean location data."""
+    items = RiderOrderItemSerializer(many=True, read_only=True)
+    location = RiderOrderLocationSerializer(read_only=True)
+    customer_name = serializers.CharField(source='user.name', read_only=True)
+    customer_phone = serializers.CharField(source='user.phone_number', read_only=True)
+
+    class Meta:
+        model = Order
+        fields = [
+            'id', 'status', 'total_amount', 'delivery_code', 'created_at',
+            'customer_name', 'customer_phone', 'location', 'items'
+        ]
+
+
 class OrderSerializer(serializers.ModelSerializer):
     # Handle nested items automatically
     items = OrderItemSerializer(many=True)
@@ -145,12 +180,16 @@ class IsRiderPermission(IsAuthenticated):
 
 
 class RiderOrderViewSet(viewsets.ModelViewSet):
-    serializer_class = OrderSerializer
+    serializer_class = RiderOrderSerializer
     permission_classes = [IsRiderPermission]  # Only riders can access this
 
     def get_queryset(self):
-        # Return only orders assigned to THIS specific rider
-        # Exclude 'delivered' and 'cancelled' so their screen isn't cluttered
+        # For list action: exclude delivered/cancelled so the screen isn't cluttered
+        # For update actions: include all non-cancelled orders so status transitions work
+        if self.action in ['update', 'partial_update']:
+            return Order.objects.filter(
+                rider=self.request.user
+            ).exclude(status='cancelled').order_by('created_at')
         return Order.objects.filter(
             rider=self.request.user
         ).exclude(status__in=['delivered', 'cancelled']).order_by('created_at')
@@ -160,21 +199,35 @@ class RiderOrderViewSet(viewsets.ModelViewSet):
         Allow riders to update the status of their assigned orders 
         (e.g., from 'preparing' to 'out_for_delivery' to 'delivered').
         """
-        order = self.get_object()
+        try:
+            order = self.get_object()
+        except Exception:
+            return Response(
+                {'error': 'Order not found or not assigned to you.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
         new_status = request.data.get('status')
 
         valid_rider_statuses = ['out_for_delivery', 'delivered']
 
         if new_status not in valid_rider_statuses:
             return Response(
-                {'error': 'Invalid status update.'},
+                {'error': f'Invalid status update. Valid statuses: {valid_rider_statuses}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Optional: Require them to pass the delivery_code to mark as delivered
+        # Prevent re-delivering already delivered orders
+        if order.status == 'delivered':
+            return Response(
+                {'error': 'Order has already been delivered.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Require delivery_code to mark as delivered
         if new_status == 'delivered':
             provided_code = request.data.get('delivery_code')
-            if str(order.delivery_code) != provided_code:
+            if not provided_code or str(order.delivery_code) != str(provided_code).strip():
                 return Response({'error': 'Invalid delivery code.'}, status=status.HTTP_400_BAD_REQUEST)
 
         order.status = new_status
@@ -329,6 +382,66 @@ class DailyAssignmentAdminView(TemplateView):
         context = super().get_context_data(**kwargs)
         context['google_maps_api_key'] = getattr(settings, 'GOOGLE_MAPS_API_KEY', '')
         return context
+
+class RiderOrdersWithRankAPIView(APIView):
+    """
+    GET /api/orders/rider/orders/with-rank/
+
+    Returns today's active orders for the authenticated rider, each enriched with
+    a `rank` field pulled from MongoDB route_states.
+
+    - If no route has been optimized yet, every order returns `"rank": null`.
+    - Orders are sorted: ranked orders first (by rank asc), then unranked.
+    """
+    permission_classes = [IsRiderPermission]
+
+    def get(self, request, *args, **kwargs):
+        colombo_tz = pytz.timezone('Asia/Colombo')
+        now = timezone.now().astimezone(colombo_tz)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+        today_str = now.strftime('%Y-%m-%d')
+
+        # 1. Fetch today's active orders from PostgreSQL
+        orders = Order.objects.filter(
+            rider=request.user,
+            created_at__range=(today_start, today_end)
+        ).exclude(status__in=['delivered', 'cancelled']).order_by('created_at')
+
+        # 2. Try to load today's rank map from MongoDB
+        rank_map = {}  # { order_id (int): rank (int) }
+        mongo_uri = getattr(settings, 'MONGO_URI', None)
+        if mongo_uri:
+            try:
+                from pymongo import MongoClient
+                client = MongoClient(mongo_uri)
+                db = client['Game_Kade']
+                collection = db['route_states']
+                saved_doc = collection.find_one(
+                    {'rider_id': request.user.id, 'date': today_str},
+                    {'_id': 0}
+                )
+                if saved_doc:
+                    for point in saved_doc.get('route_points', []):
+                        rank_map[point['order_id']] = point['rank']
+            except Exception:
+                # MongoDB unavailable — just return unranked orders, don't crash
+                pass
+
+        # 3. Serialize orders and inject rank
+        serializer = RiderOrderSerializer(orders, many=True)
+        result = []
+        for order_data in serializer.data:
+            order_id = order_data['id']
+            enriched = dict(order_data)
+            enriched['rank'] = rank_map.get(order_id, None)
+            result.append(enriched)
+
+        # 4. Sort: ranked first (ascending), unranked last
+        result.sort(key=lambda x: (x['rank'] is None, x['rank'] or 0))
+
+        return Response(result, status=status.HTTP_200_OK)
+
 
 class OptimizeRouteAPIView(APIView):
     permission_classes = [IsRiderPermission]

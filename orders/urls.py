@@ -2,7 +2,7 @@ from django.urls import path
 from .views import (
     OrderLocationViewSet, OrderViewSet, RiderOrderViewSet, DeliveryZoneViewSet, DeliveryZoneAdminView,
     DailySummaryAPIView, UnassignedOrdersAPIView, BulkAssignRiderAPIView, RidersListAPIView, DailyAssignmentAdminView,
-    OptimizeRouteAPIView, GetOptimizedRouteAPIView
+    OptimizeRouteAPIView, GetOptimizedRouteAPIView, RiderOrdersWithRankAPIView
 )
 
 urlpatterns = [
@@ -40,6 +40,8 @@ urlpatterns = [
 
     path('rider/orders/',
          RiderOrderViewSet.as_view({'get': 'list'}), name='rider-orders-list'),
+    path('rider/orders/with-rank/',
+         RiderOrdersWithRankAPIView.as_view(), name='rider-orders-with-rank'),
     path('rider/orders/<int:pk>/', RiderOrderViewSet.as_view(
         {'put': 'update', 'patch': 'update'}), name='rider-orders-detail'),
 
