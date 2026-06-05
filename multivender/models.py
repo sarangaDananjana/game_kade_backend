@@ -25,6 +25,9 @@ class Vendor(models.Model):
                               on_delete=models.CASCADE, related_name='shops')
     shop_name = models.CharField(max_length=255)
 
+    logo = models.ImageField(upload_to='vendor_logos/', blank=True, null=True)
+    cover_image = models.ImageField(upload_to='vendor_covers/', blank=True, null=True)
+
     lat = models.FloatField(help_text="Latitude coordinate")
     lng = models.FloatField(help_text="Longitude coordinate")
     location_point = models.PointField(null=True, blank=True, geography=True)

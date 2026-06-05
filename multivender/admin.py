@@ -7,7 +7,7 @@ class ProductInline(admin.TabularInline):
 
 @admin.register(Vendor)
 class VendorAdmin(admin.ModelAdmin):
-    list_display = ('shop_name', 'owner', 'is_pickup_only', 'is_active', 'created_at')
+    list_display = ('shop_name', 'owner', 'is_pickup_only', 'is_active', 'created_at', 'logo', 'cover_image')
     list_filter = ('is_active', 'is_pickup_only')
     search_fields = ('shop_name', 'owner__phone_number')
     inlines = [ProductInline]
