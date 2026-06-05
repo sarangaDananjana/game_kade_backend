@@ -81,7 +81,7 @@ class Product(models.Model):
 class OrderLocation(models.Model):
     # Using settings.AUTH_USER_MODEL here as well
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
-                             related_name='locations', null=True, blank=True)
+                             related_name='multivendor_locations', null=True, blank=True)
     name = models.CharField(
         max_length=255, help_text="e.g., University Canteen, My Boarding")
     lat = models.FloatField(help_text="Latitude coordinate")
@@ -117,7 +117,7 @@ class Order(models.Model):
 
     # Safely linking both the buyer and the rider to your User app
     user = models.ForeignKey(settings.AUTH_USER_MODEL,
-                             on_delete=models.CASCADE, related_name='orders')
+                             on_delete=models.CASCADE, related_name='multivendor_orders')
     vendor = models.ForeignKey(
         Vendor, on_delete=models.CASCADE, related_name='orders')
     location = models.ForeignKey(
@@ -125,7 +125,7 @@ class Order(models.Model):
     zone = models.ForeignKey(DeliveryZone, on_delete=models.SET_NULL,
                              null=True, blank=True, related_name='orders')
     rider = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
-                              null=True, blank=True, related_name='assigned_deliveries')
+                              null=True, blank=True, related_name='multivendor_assigned_deliveries')
 
     status = models.CharField(
         max_length=20, choices=STATUS_CHOICES, default='pending')
