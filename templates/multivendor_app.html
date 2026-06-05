@@ -166,6 +166,24 @@
             border-bottom: 1px solid var(--sand-mid);
             padding-bottom: 10px;
         }
+
+        /* Responsive adjustments */
+        @media (max-width: 600px) {
+            nav {
+                padding: 16px 20px;
+            }
+            .container {
+                margin: 20px auto;
+                padding: 10px;
+            }
+            .card {
+                padding: 20px;
+            }
+            .cart-panel {
+                width: 100%;
+                max-width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
@@ -185,7 +203,7 @@
             <div id="phoneStep">
                 <div class="input-group">
                     <label>Phone Number</label>
-                    <input type="text" id="phoneInput" placeholder="e.g. 0774610536" value="0774610536">
+                    <input type="text" id="phoneInput" placeholder="e.g. 0774610536" value="">
                 </div>
                 <button class="btn" style="width: 100%" onclick="sendOTP()">Send OTP</button>
             </div>
@@ -344,7 +362,7 @@
 
         async function loadLocations() {
             try {
-                const res = await fetchWithAuth('/api/multivender/locations/');
+                const res = await fetchWithAuth('/shop/locations/');
                 const locations = await res.json();
                 const select = document.getElementById('locationSelect');
                 // Keep the "Store Pickup" option and append the rest
@@ -358,7 +376,7 @@
         }
 
         async function loadVendors() {
-            const res = await fetchWithAuth('/api/multivender/vendors/');
+            const res = await fetchWithAuth('/shop/vendors/');
             const vendors = await res.json();
             const grid = document.getElementById('vendorsGrid');
             grid.innerHTML = '';
@@ -377,7 +395,7 @@
         async function loadVendorDetails(id, name) {
             currentVendor = id;
             document.getElementById('vendorTitle').innerText = name;
-            const res = await fetchWithAuth(`/api/multivender/vendors/${id}/`);
+            const res = await fetchWithAuth(`/shop/vendors/${id}/`);
             const vendor = await res.json();
             
             const grid = document.getElementById('productsGrid');
@@ -467,7 +485,7 @@
             };
 
             try {
-                const res = await fetchWithAuth('/api/multivender/orders/create/', {
+                const res = await fetchWithAuth('/shop/orders/create/', {
                     method: 'POST',
                     body: JSON.stringify(orderData)
                 });
