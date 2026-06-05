@@ -103,36 +103,178 @@
         .view { display: none; }
         .view.active { display: block; }
 
-        /* Grid */
-        .grid {
+        /* Uber Eats style grid */
+        .vendor-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 24px;
         }
 
-        .item-card {
+        .vendor-card {
+            background: var(--white);
+            border-radius: 12px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            border: 1px solid var(--sand-mid);
+        }
+
+        .vendor-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+        }
+
+        .vendor-cover {
+            height: 160px;
+            background-color: var(--sand-mid);
+            background-size: cover;
+            background-position: center;
+            position: relative;
+        }
+
+        .vendor-logo {
+            position: absolute;
+            bottom: -20px;
+            left: 20px;
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            border: 4px solid var(--white);
+            background-color: var(--white);
+            background-size: cover;
+            background-position: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .vendor-info {
+            padding: 24px 20px 20px 20px;
+        }
+
+        .vendor-info h3 {
+            margin: 0 0 4px 0;
+            font-size: 1.2rem;
+            color: var(--charcoal);
+            font-family: var(--sans);
+        }
+
+        .vendor-info p {
+            margin: 0;
+            color: var(--mid-grey);
+            font-size: 0.9rem;
+        }
+
+        /* Products Grid */
+        .product-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .product-card {
             background: var(--white);
             border: 1px solid var(--sand-mid);
-            border-radius: var(--radius);
-            padding: 20px;
-            text-align: center;
-            cursor: pointer;
-            transition: transform 0.2s;
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: box-shadow 0.2s;
         }
 
-        .item-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 6px 16px rgba(0,0,0,0.08);
+        .product-card:hover {
+            box-shadow: 0 4px 16px rgba(0,0,0,0.08);
         }
 
-        .item-card h3 {
-            margin: 10px 0;
+        .product-info {
+            flex-grow: 1;
+            padding-right: 16px;
         }
 
-        .price {
-            color: var(--terracotta);
-            font-weight: 600;
+        .product-info h3 {
+            margin: 0 0 8px 0;
             font-size: 1.1rem;
+            font-family: var(--sans);
+        }
+
+        .product-desc {
+            font-size: 0.85rem;
+            color: var(--mid-grey);
+            margin: 0 0 8px 0;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .product-price {
+            font-weight: 600;
+            color: var(--charcoal);
+            margin: 0;
+        }
+
+        .product-image {
+            width: 120px;
+            height: 120px;
+            border-radius: 8px;
+            background-color: var(--sand-mid);
+            background-size: cover;
+            background-position: center;
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .add-btn {
+            position: absolute;
+            bottom: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--white);
+            color: var(--charcoal);
+            border: 1px solid var(--sand-mid);
+            border-radius: 20px;
+            padding: 6px 16px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .add-btn:hover {
+            background: var(--sand);
+            border-color: var(--charcoal);
+        }
+        
+        .vendor-header-large {
+            height: 250px;
+            border-radius: 12px;
+            background-size: cover;
+            background-position: center;
+            position: relative;
+            margin-bottom: 30px;
+        }
+        
+        .vendor-header-large .overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+            border-radius: 12px;
+        }
+        
+        .vendor-header-large .content {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: var(--white);
+        }
+        
+        .vendor-header-large h2 {
+            color: var(--white);
+            margin: 0;
+            font-size: 2.5rem;
         }
 
         .cart-panel {
@@ -226,8 +368,7 @@
 
         <!-- Vendor Detail View -->
         <div id="vendorDetailView" class="view">
-            <button class="btn" style="background: var(--mid-grey); margin-bottom: 20px;" onclick="showView('vendorsView')">← Back</button>
-            <h2 id="vendorTitle">Vendor Name</h2>
+            <div id="vendorDetailHeader"></div>
             <div class="grid" id="productsGrid">
                 <!-- Product cards injected here -->
             </div>
@@ -380,38 +521,64 @@
             const vendors = await res.json();
             const grid = document.getElementById('vendorsGrid');
             grid.innerHTML = '';
+            grid.className = 'vendor-grid';
+            
             vendors.forEach(v => {
+                const cover = v.cover_image || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=600&q=80';
+                const logo = v.logo || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(v.shop_name) + '&background=1a3a2e&color=fff';
+                
                 grid.innerHTML += `
-                    <div class="item-card" onclick="loadVendorDetails(${v.id}, '${v.shop_name}')">
-                        <h3>${v.shop_name}</h3>
-                        <p style="color: var(--mid-grey); font-size: 0.9rem;">
-                            ${v.is_pickup_only ? 'Pickup Only' : 'Delivery Available'}
-                        </p>
+                    <div class="vendor-card" onclick="loadVendorDetails(${v.id}, '${v.shop_name.replace(/'/g, "\\'")}', '${cover}')">
+                        <div class="vendor-cover" style="background-image: url('${cover}')">
+                            <div class="vendor-logo" style="background-image: url('${logo}')"></div>
+                        </div>
+                        <div class="vendor-info">
+                            <h3>${v.shop_name}</h3>
+                            <p>${v.is_pickup_only ? 'Pickup Only' : 'Delivery Available'} • 20-30 min</p>
+                        </div>
                     </div>
                 `;
             });
         }
 
-        async function loadVendorDetails(id, name) {
+        async function loadVendorDetails(id, name, coverImg) {
             currentVendor = id;
-            document.getElementById('vendorTitle').innerText = name;
+            
+            const header = document.getElementById('vendorDetailHeader');
+            header.innerHTML = `
+                <button class="btn" style="background: var(--white); color: var(--charcoal); margin-bottom: 20px; border: 1px solid var(--sand-mid);" onclick="showView('vendorsView')">← Back</button>
+                <div class="vendor-header-large" style="background-image: url('${coverImg}')">
+                    <div class="overlay"></div>
+                    <div class="content">
+                        <h2>${name}</h2>
+                    </div>
+                </div>
+            `;
+            
             const res = await fetchWithAuth(`/shop/vendors/${id}/`);
             const vendor = await res.json();
             
             const grid = document.getElementById('productsGrid');
             grid.innerHTML = '';
+            grid.className = 'product-grid';
             
             if (!vendor.products || vendor.products.length === 0) {
                 grid.innerHTML = '<p>No products available right now.</p>';
             } else {
                 vendor.products.forEach(p => {
+                    const imgStyle = p.image ? `background-image: url('${p.image}')` : `background-color: var(--sand-mid)`;
+                    const desc = p.description ? p.description : '';
+                    
                     grid.innerHTML += `
-                        <div class="item-card">
-                            <h3>${p.name}</h3>
-                            <p style="color: var(--mid-grey); font-size: 0.9rem;">${p.category}</p>
-                            <p class="price">LKR ${p.price}</p>
-                            <button class="btn" style="padding: 8px 16px; font-size: 0.8rem; margin-top: 10px;" 
-                                onclick="addToCart(${p.id}, '${p.name}', ${p.price}, ${vendor.id})">Add to Cart</button>
+                        <div class="product-card">
+                            <div class="product-info">
+                                <h3>${p.name}</h3>
+                                <p class="product-desc">${desc}</p>
+                                <p class="product-price">LKR ${p.price}</p>
+                            </div>
+                            <div class="product-image" style="${imgStyle}">
+                                <button class="add-btn" onclick="addToCart(${p.id}, '${p.name.replace(/'/g, "\\'")}', ${p.price}, ${vendor.id})">Add</button>
+                            </div>
                         </div>
                     `;
                 });
