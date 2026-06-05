@@ -10,10 +10,15 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AddField(
-            model_name='customuser',
-            name='role',
-            field=models.CharField(choices=[('customer', 'Customer'), ('owner', 'Owner'), ('rider', 'Rider'), ('admin', 'Admin')], default='customer', max_length=20),
+        migrations.SeparateDatabaseAndState(
+            database_operations=[],
+            state_operations=[
+                migrations.AddField(
+                    model_name='customuser',
+                    name='role',
+                    field=models.CharField(choices=[('customer', 'Customer'), ('owner', 'Owner'), ('rider', 'Rider'), ('admin', 'Admin')], default='customer', max_length=20),
+                ),
+            ],
         ),
         migrations.CreateModel(
             name='AppVersion',
