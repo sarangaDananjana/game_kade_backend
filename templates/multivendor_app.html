@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meal Drop — Multivendor Delivery</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --forest: #1a3a2e;
+            --forest-mid: #254d3e;
+            --forest-light: #2e6350;
+            --sand: #f2ede4;
+            --sand-mid: #e8e0d3;
+            --terracotta: #b5603a;
+            --terra-light: #c97a56;
+            --charcoal: #1c1c1c;
+            --mid-grey: #6b6b6b;
+            --white: #ffffff;
+            --radius: 8px;
+            --serif: 'DM Serif Display', Georgia, serif;
+            --sans: 'DM Sans', Helvetica, sans-serif;
+        }
+
+        body {
+            font-family: var(--sans);
+            background: var(--sand);
+            color: var(--charcoal);
+            margin: 0;
+            padding: 0;
+        }
+
+        nav {
+            background: var(--forest);
+            color: var(--white);
+            padding: 16px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-family: var(--serif);
+            font-size: 1.5rem;
+            color: var(--white);
+            text-decoration: none;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+
+        .card {
+            background: var(--white);
+            border-radius: var(--radius);
+            padding: 30px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+        }
+
+        h1, h2, h3 {
+            font-family: var(--serif);
+            color: var(--forest);
+        }
+
+        .btn {
+            background: var(--terracotta);
+            color: var(--white);
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            font-family: var(--sans);
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn:hover {
+            background: #9e5231;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--sand-mid);
+            border-radius: 4px;
+            font-family: var(--sans);
+        }
+
+        /* Views */
+        .view { display: none; }
+        .view.active { display: block; }
+
+        /* Grid */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        .item-card {
+            background: var(--white);
+            border: 1px solid var(--sand-mid);
+            border-radius: var(--radius);
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .item-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.08);
+        }
+
+        .item-card h3 {
+            margin: 10px 0;
+        }
+
+        .price {
+            color: var(--terracotta);
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .cart-panel {
+            position: fixed;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 320px;
+            background: var(--white);
+            box-shadow: -4px 0 12px rgba(0,0,0,0.05);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            transform: translateX(100%);
+            transition: transform 0.3s;
+        }
+
+        .cart-panel.open {
+            transform: translateX(0);
+        }
+
+        .cart-items {
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+
+        .cart-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            border-bottom: 1px solid var(--sand-mid);
+            padding-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <nav>
+        <a href="#" class="logo" onclick="showView('vendorsView')">Meal Drop</a>
+        <div>
+            <span id="userPhone" style="margin-right: 20px;"></span>
+            <button class="btn" onclick="toggleCart()">Cart (<span id="cartCount">0</span>)</button>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- Auth View -->
+        <div id="authView" class="view active card" style="max-width: 400px; margin: 60px auto;">
+            <h2>Login or Register</h2>
+            <div id="phoneStep">
+                <div class="input-group">
+                    <label>Phone Number</label>
+                    <input type="text" id="phoneInput" placeholder="e.g. 0774610536" value="0774610536">
+                </div>
+                <button class="btn" style="width: 100%" onclick="sendOTP()">Send OTP</button>
+            </div>
+            <div id="otpStep" style="display: none;">
+                <div class="input-group">
+                    <label>OTP Code</label>
+                    <input type="text" id="otpInput" placeholder="e.g. 00000">
+                </div>
+                <button class="btn" style="width: 100%" onclick="verifyOTP()">Verify</button>
+            </div>
+        </div>
+
+        <!-- Vendors View -->
+        <div id="vendorsView" class="view">
+            <h2>Available Vendors</h2>
+            <div class="grid" id="vendorsGrid">
+                <!-- Vendor cards injected here -->
+            </div>
+        </div>
+
+        <!-- Vendor Detail View -->
+        <div id="vendorDetailView" class="view">
+            <button class="btn" style="background: var(--mid-grey); margin-bottom: 20px;" onclick="showView('vendorsView')">← Back</button>
+            <h2 id="vendorTitle">Vendor Name</h2>
+            <div class="grid" id="productsGrid">
+                <!-- Product cards injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Cart Sidebar -->
+    <div class="cart-panel" id="cartPanel">
+        <h2>Your Cart</h2>
+        <div class="cart-items" id="cartItems">
+            <!-- Cart items injected here -->
+        </div>
+        <div style="margin-top: 20px;">
+            <div class="input-group">
+                <label>Delivery Location</label>
+                <select id="locationSelect" style="width: 100%; padding: 12px; border: 1px solid var(--sand-mid); border-radius: 4px; font-family: var(--sans);">
+                    <option value="">Store Pickup</option>
+                </select>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 20px; font-weight: 600; font-size: 1.2rem;">
+                <span>Total:</span>
+                <span id="cartTotal">LKR 0.00</span>
+            </div>
+            <button class="btn" style="width: 100%" onclick="checkout()">Checkout</button>
+        </div>
+    </div>
+
+    <script>
+        let accessToken = localStorage.getItem('access_token') || null;
+        let refreshToken = localStorage.getItem('refresh_token') || null;
+        let currentPhone = '';
+        let currentVendor = null;
+        let cart = [];
+
+        // View Navigation
+        function showView(viewId) {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.getElementById(viewId).classList.add('active');
+            
+            if (viewId === 'vendorsView' && accessToken) {
+                loadVendors();
+                loadLocations();
+            }
+        }
+
+        // Init
+        if (accessToken) {
+            showView('vendorsView');
+            document.getElementById('userPhone').innerText = 'Logged In';
+        }
+
+        // --- AUTH ---
+        async function sendOTP() {
+            currentPhone = document.getElementById('phoneInput').value;
+            const res = await fetch('/api/auth/send-otp/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone_number: currentPhone, role: 'customer' })
+            });
+            if (res.ok) {
+                document.getElementById('phoneStep').style.display = 'none';
+                document.getElementById('otpStep').style.display = 'block';
+            } else {
+                alert("Failed to send OTP");
+            }
+        }
+
+        async function verifyOTP() {
+            const otp = document.getElementById('otpInput').value;
+            const res = await fetch('/api/auth/verify-otp/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone_number: currentPhone, otp_code: otp })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                accessToken = data.access;
+                refreshToken = data.refresh;
+                localStorage.setItem('access_token', accessToken);
+                localStorage.setItem('refresh_token', refreshToken);
+                document.getElementById('userPhone').innerText = currentPhone;
+                showView('vendorsView');
+            } else {
+                alert("Invalid OTP");
+            }
+        }
+
+        // --- DATA FETCHING ---
+        async function refreshAuthToken() {
+            if (!refreshToken) return false;
+            try {
+                const res = await fetch('/api/auth/token/refresh/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ refresh: refreshToken })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    accessToken = data.access;
+                    localStorage.setItem('access_token', accessToken);
+                    return true;
+                }
+            } catch (e) {
+                console.error(e);
+            }
+            return false;
+        }
+
+        async function fetchWithAuth(url, options = {}) {
+            if (!options.headers) options.headers = {};
+            options.headers['Authorization'] = `Bearer ${accessToken}`;
+            options.headers['Content-Type'] = 'application/json';
+            
+            let res = await fetch(url, options);
+            if (res.status === 401) {
+                const refreshed = await refreshAuthToken();
+                if (refreshed) {
+                    // Retry with new token
+                    options.headers['Authorization'] = `Bearer ${accessToken}`;
+                    res = await fetch(url, options);
+                } else {
+                    localStorage.removeItem('access_token');
+                    localStorage.removeItem('refresh_token');
+                    accessToken = null;
+                    refreshToken = null;
+                    showView('authView');
+                    throw new Error("Unauthorized");
+                }
+            }
+            return res;
+        }
+
+        async function loadLocations() {
+            try {
+                const res = await fetchWithAuth('/api/multivender/locations/');
+                const locations = await res.json();
+                const select = document.getElementById('locationSelect');
+                // Keep the "Store Pickup" option and append the rest
+                select.innerHTML = '<option value="">Store Pickup</option>';
+                locations.forEach(loc => {
+                    select.innerHTML += `<option value="${loc.id}">${loc.name} - ${loc.unique_identity}</option>`;
+                });
+            } catch (e) {
+                console.error("Failed to load locations", e);
+            }
+        }
+
+        async function loadVendors() {
+            const res = await fetchWithAuth('/api/multivender/vendors/');
+            const vendors = await res.json();
+            const grid = document.getElementById('vendorsGrid');
+            grid.innerHTML = '';
+            vendors.forEach(v => {
+                grid.innerHTML += `
+                    <div class="item-card" onclick="loadVendorDetails(${v.id}, '${v.shop_name}')">
+                        <h3>${v.shop_name}</h3>
+                        <p style="color: var(--mid-grey); font-size: 0.9rem;">
+                            ${v.is_pickup_only ? 'Pickup Only' : 'Delivery Available'}
+                        </p>
+                    </div>
+                `;
+            });
+        }
+
+        async function loadVendorDetails(id, name) {
+            currentVendor = id;
+            document.getElementById('vendorTitle').innerText = name;
+            const res = await fetchWithAuth(`/api/multivender/vendors/${id}/`);
+            const vendor = await res.json();
+            
+            const grid = document.getElementById('productsGrid');
+            grid.innerHTML = '';
+            
+            if (!vendor.products || vendor.products.length === 0) {
+                grid.innerHTML = '<p>No products available right now.</p>';
+            } else {
+                vendor.products.forEach(p => {
+                    grid.innerHTML += `
+                        <div class="item-card">
+                            <h3>${p.name}</h3>
+                            <p style="color: var(--mid-grey); font-size: 0.9rem;">${p.category}</p>
+                            <p class="price">LKR ${p.price}</p>
+                            <button class="btn" style="padding: 8px 16px; font-size: 0.8rem; margin-top: 10px;" 
+                                onclick="addToCart(${p.id}, '${p.name}', ${p.price}, ${vendor.id})">Add to Cart</button>
+                        </div>
+                    `;
+                });
+            }
+            showView('vendorDetailView');
+        }
+
+        // --- CART ---
+        function toggleCart() {
+            document.getElementById('cartPanel').classList.toggle('open');
+        }
+
+        function addToCart(productId, name, price, vendorId) {
+            // Ensure single vendor per order for simplicity
+            if (cart.length > 0 && cart[0].vendorId !== vendorId) {
+                alert("Please checkout or clear your cart before ordering from a different vendor.");
+                return;
+            }
+            
+            const existing = cart.find(i => i.product === productId);
+            if (existing) {
+                existing.quantity += 1;
+            } else {
+                cart.push({ product: productId, name, price: parseFloat(price), quantity: 1, vendorId });
+            }
+            updateCartUI();
+        }
+
+        function updateCartUI() {
+            const container = document.getElementById('cartItems');
+            container.innerHTML = '';
+            let total = 0;
+            let count = 0;
+
+            cart.forEach(item => {
+                const itemTotal = item.price * item.quantity;
+                total += itemTotal;
+                count += item.quantity;
+                container.innerHTML += `
+                    <div class="cart-item">
+                        <div>
+                            <div style="font-weight: 500">${item.name}</div>
+                            <div style="font-size: 0.8rem; color: var(--mid-grey)">LKR ${item.price} x ${item.quantity}</div>
+                        </div>
+                        <div style="font-weight: 600">LKR ${itemTotal.toFixed(2)}</div>
+                    </div>
+                `;
+            });
+
+            document.getElementById('cartTotal').innerText = `LKR ${total.toFixed(2)}`;
+            document.getElementById('cartCount').innerText = count;
+        }
+
+        // --- CHECKOUT ---
+        async function checkout() {
+            if (cart.length === 0) {
+                alert("Your cart is empty!");
+                return;
+            }
+
+            const vendorId = cart[0].vendorId;
+            const locationVal = document.getElementById('locationSelect').value;
+            let total = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+
+            const orderData = {
+                vendor: vendorId,
+                total_amount: total,
+                status: 'pending',
+                location: locationVal ? parseInt(locationVal) : null,
+                items: cart.map(i => ({ product: i.product, quantity: i.quantity }))
+            };
+
+            try {
+                const res = await fetchWithAuth('/api/multivender/orders/create/', {
+                    method: 'POST',
+                    body: JSON.stringify(orderData)
+                });
+                
+                if (res.ok) {
+                    alert("Order placed successfully!");
+                    cart = [];
+                    updateCartUI();
+                    toggleCart();
+                    showView('vendorsView');
+                } else {
+                    alert("Failed to place order. Ensure product data matches database.");
+                }
+            } catch (e) {
+                alert("Error placing order.");
+            }
+        }
+    </script>
+</body>
+</html>

@@ -33,6 +33,7 @@ urlpatterns = [
     path('delete-account/', views.delete_account_view, name='delete_account'),
     path('api/products/', include('products.urls')),
     path('api/orders/', include('orders.urls')),
+    path('api/multivender/', include('multivender.urls')),
 ]
 
 # Serve media files (like product images) during development
