@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     'users',
     'products',
     'orders',
+    'multivender',
 ]
 
 AUTH_USER_MODEL = 'users.CustomUser'
@@ -178,4 +179,3 @@ try:
     route_states_collection = mongo_db['OptimizedRoutes']
 except Exception as e:
     print(f"Failed to connect to MongoDB: {e}")
-
