@@ -20,13 +20,18 @@ class Migration(migrations.Migration):
                 ),
             ],
         ),
-        migrations.CreateModel(
-            name='AppVersion',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('version_code', models.IntegerField(help_text='The internal version code (e.g., 10, 11)')),
-                ('link', models.URLField(help_text='Link to download or view the app update')),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
+        migrations.SeparateDatabaseAndState(
+            database_operations=[],
+            state_operations=[
+                migrations.CreateModel(
+                    name='AppVersion',
+                    fields=[
+                        ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                        ('version_code', models.IntegerField(help_text='The internal version code (e.g., 10, 11)')),
+                        ('link', models.URLField(help_text='Link to download or view the app update')),
+                        ('created_at', models.DateTimeField(auto_now_add=True)),
+                    ],
+                ),
             ],
         ),
     ]
