@@ -32,7 +32,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-&%-=qsm9k7e0+2@0lnz(#nw31v2gl_v2lt^k-642_25d^l7fk@'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = ['47.236.50.0', 'mealdrop.shop', 'www.mealdrop.shop']
 
