@@ -31,8 +31,8 @@ class OrderCreateView(generics.CreateAPIView):
         now_utc = timezone.now()
         sl_time = now_utc + timedelta(hours=5, minutes=30)
         
-        if not (13 <= sl_time.hour < 17):
-            raise ValidationError("We are currently closed. Orders are only accepted between 1:00 PM and 5:00 PM.")
+        if not (12 <= sl_time.hour < 17):
+            raise ValidationError("We are currently closed. Orders are only accepted between 12:00 PM and 5:00 PM.")
             
         serializer.save(user=self.request.user)
 

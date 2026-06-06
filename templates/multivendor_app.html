@@ -421,7 +421,7 @@
         <!-- Closed View -->
         <div id="closedView" class="view card" style="text-align: center; max-width: 500px; margin: 80px auto; padding: 40px;">
             <h2 style="font-size: 2.5rem; margin-bottom: 10px;">We're Closed 🌙</h2>
-            <p style="color: var(--mid-grey); font-size: 1.1rem; margin-bottom: 30px;">Our vendors are currently resting. We accept new orders daily between <strong>1:00 PM and 5:00 PM</strong>.</p>
+            <p style="color: var(--mid-grey); font-size: 1.1rem; margin-bottom: 30px;">Our vendors are currently resting. We accept new orders daily between <strong>12:00 PM and 5:00 PM</strong>.</p>
             <button class="btn" onclick="showView('ordersView')">View Past Orders</button>
         </div>
     </div>
@@ -467,7 +467,7 @@
             
             const banner = document.getElementById('timeBanner');
             
-            if (hours >= 13 && hours < 17) {
+            if (hours >= 12 && hours < 17) {
                 isClosed = false;
                 const remainingHours = 16 - hours;
                 const remainingMinutes = 59 - slTime.getMinutes();
@@ -479,7 +479,7 @@
                 isClosed = true;
                 banner.style.display = 'block';
                 banner.style.background = 'var(--terracotta)';
-                banner.innerText = 'We are currently closed for new orders (Open 1:00 PM - 5:00 PM).';
+                banner.innerText = 'We are currently closed for new orders (Open 12:00 PM - 5:00 PM).';
                 
                 const activeView = document.querySelector('.view.active');
                 if (activeView && (activeView.id === 'vendorsView' || activeView.id === 'vendorDetailView')) {
@@ -804,7 +804,7 @@
         // --- CHECKOUT ---
         async function checkout() {
             if (isClosed) {
-                alert("We are currently closed. Orders are only accepted from 1:00 PM to 5:00 PM.");
+                alert("We are currently closed. Orders are only accepted from 12:00 PM to 5:00 PM.");
                 return;
             }
 
