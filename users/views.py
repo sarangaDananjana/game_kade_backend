@@ -115,7 +115,8 @@ class VerifyOTPView(APIView):
             'message': 'Login successful.',
             'access': str(refresh.access_token),
             'refresh': str(refresh),
-            'role': user.role  # NEW: Send role back to frontend so they know who logged in
+            'role': user.role,
+            'name': user.name
         }, status=status.HTTP_200_OK)
 
 

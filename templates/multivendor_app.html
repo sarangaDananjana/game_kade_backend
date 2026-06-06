@@ -22,12 +22,17 @@
             --sans: 'DM Sans', Helvetica, sans-serif;
         }
 
+        * {
+            box-sizing: border-box;
+        }
+
         body {
             font-family: var(--sans);
             background: var(--sand);
             color: var(--charcoal);
             margin: 0;
             padding: 0;
+            overflow-x: hidden;
         }
 
         nav {
@@ -282,18 +287,39 @@
             right: 0;
             top: 0;
             bottom: 0;
-            width: 320px;
+            width: 380px;
             background: var(--white);
             box-shadow: -4px 0 12px rgba(0,0,0,0.05);
-            padding: 20px;
+            padding: 24px;
             display: flex;
             flex-direction: column;
             transform: translateX(100%);
             transition: transform 0.3s;
+            z-index: 1000;
         }
 
         .cart-panel.open {
             transform: translateX(0);
+        }
+        
+        .cart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .cart-header h2 {
+            margin: 0;
+        }
+        
+        .close-cart {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--mid-grey);
+            padding: 0;
         }
 
         .cart-items {
@@ -333,7 +359,7 @@
     <nav>
         <a href="#" class="logo" onclick="showView('vendorsView')">Meal Drop</a>
         <div>
-            <span id="userPhone" style="margin-right: 20px;"></span>
+            <span id="userPhone" style="margin-right: 15px; font-weight: 500;"></span>
             <button class="btn" onclick="toggleCart()">Cart (<span id="cartCount">0</span>)</button>
         </div>
     </nav>
@@ -347,7 +373,15 @@
                     <label>Phone Number</label>
                     <input type="text" id="phoneInput" placeholder="e.g. 0774610536" value="">
                 </div>
-                <button class="btn" style="width: 100%" onclick="sendOTP()">Send OTP</button>
+                <button class="btn" style="width: 100%" onclick="sendOTP()">Continue</button>
+            </div>
+            <div id="nameStep" style="display: none;">
+                <p style="color: var(--mid-grey); margin-bottom: 20px;">It looks like you're new here! Please enter your name.</p>
+                <div class="input-group">
+                    <label>Your Name</label>
+                    <input type="text" id="nameInput" placeholder="e.g. John Doe">
+                </div>
+                <button class="btn" style="width: 100%" onclick="sendOTP(true)">Send OTP</button>
             </div>
             <div id="otpStep" style="display: none;">
                 <div class="input-group">
@@ -377,7 +411,10 @@
 
     <!-- Cart Sidebar -->
     <div class="cart-panel" id="cartPanel">
-        <h2>Your Cart</h2>
+        <div class="cart-header">
+            <h2>Your Cart</h2>
+            <button class="close-cart" onclick="toggleCart()">×</button>
+        </div>
         <div class="cart-items" id="cartItems">
             <!-- Cart items injected here -->
         </div>
@@ -399,6 +436,7 @@
     <script>
         let accessToken = localStorage.getItem('access_token') || null;
         let refreshToken = localStorage.getItem('refresh_token') || null;
+        let userName = localStorage.getItem('user_name') || null;
         let currentPhone = '';
         let currentVendor = null;
         let cart = [];
@@ -417,22 +455,41 @@
         // Init
         if (accessToken) {
             showView('vendorsView');
-            document.getElementById('userPhone').innerText = 'Logged In';
+            document.getElementById('userPhone').innerText = userName ? `Hi, ${userName}` : 'Logged In';
         }
 
         // --- AUTH ---
-        async function sendOTP() {
+        async function sendOTP(withName = false) {
             currentPhone = document.getElementById('phoneInput').value;
-            const res = await fetch('/api/auth/send-otp/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phone_number: currentPhone, role: 'customer' })
-            });
-            if (res.ok) {
-                document.getElementById('phoneStep').style.display = 'none';
-                document.getElementById('otpStep').style.display = 'block';
-            } else {
-                alert("Failed to send OTP");
+            const payload = { phone_number: currentPhone, role: 'customer' };
+            if (withName) {
+                payload.name = document.getElementById('nameInput').value;
+            }
+
+            try {
+                const res = await fetch('/api/auth/send-otp/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+
+                if (res.ok || res.status === 201) {
+                    if (data.is_new_user && !withName) {
+                        // User is new, ask for name first
+                        document.getElementById('phoneStep').style.display = 'none';
+                        document.getElementById('nameStep').style.display = 'block';
+                    } else {
+                        // OTP Sent
+                        document.getElementById('phoneStep').style.display = 'none';
+                        document.getElementById('nameStep').style.display = 'none';
+                        document.getElementById('otpStep').style.display = 'block';
+                    }
+                } else {
+                    alert("Failed to send OTP: " + (data.error || "Unknown error"));
+                }
+            } catch (e) {
+                alert("Error connecting to server.");
             }
         }
 
@@ -447,9 +504,12 @@
                 const data = await res.json();
                 accessToken = data.access;
                 refreshToken = data.refresh;
+                userName = data.name;
                 localStorage.setItem('access_token', accessToken);
                 localStorage.setItem('refresh_token', refreshToken);
-                document.getElementById('userPhone').innerText = currentPhone;
+                if (userName) localStorage.setItem('user_name', userName);
+
+                document.getElementById('userPhone').innerText = userName ? `Hi, ${userName}` : currentPhone;
                 showView('vendorsView');
             } else {
                 alert("Invalid OTP");
