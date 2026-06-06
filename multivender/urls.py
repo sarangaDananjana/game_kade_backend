@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import VendorListView, VendorDetailView, OrderCreateView, OrderLocationListView, multivendor_web_view
+from .views import VendorListView, VendorDetailView, OrderCreateView, OrderListView, OrderLocationListView, multivendor_web_view
 
 urlpatterns = [
     # REST API Endpoints
@@ -7,6 +7,7 @@ urlpatterns = [
     path('vendors/<int:pk>/', VendorDetailView.as_view(), name='vendor-detail'),
     path('locations/', OrderLocationListView.as_view(), name='location-list'),
     path('orders/create/', OrderCreateView.as_view(), name='order-create'),
+    path('orders/', OrderListView.as_view(), name='order-list'),
     
     # Web View Endpoint
     path('web/', multivendor_web_view, name='multivendor-web'),

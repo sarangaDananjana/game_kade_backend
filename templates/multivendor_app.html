@@ -360,7 +360,8 @@
         <a href="#" class="logo" onclick="showView('vendorsView')">Meal Drop</a>
         <div>
             <span id="userPhone" style="margin-right: 15px; font-weight: 500;"></span>
-            <button class="btn" onclick="toggleCart()">Cart (<span id="cartCount">0</span>)</button>
+            <button class="btn" onclick="showView('ordersView')" style="background: transparent; color: white; border: 1px solid white; margin-right: 10px; padding: 8px 16px;">Orders</button>
+            <button class="btn" onclick="toggleCart()" style="padding: 8px 16px;">Cart (<span id="cartCount">0</span>)</button>
         </div>
     </nav>
 
@@ -407,6 +408,15 @@
                 <!-- Product cards injected here -->
             </div>
         </div>
+
+        <!-- Orders View -->
+        <div id="ordersView" class="view">
+            <button class="btn" style="background: var(--white); color: var(--charcoal); margin-bottom: 20px; border: 1px solid var(--sand-mid);" onclick="showView('vendorsView')">← Back to Vendors</button>
+            <h2>Your Orders</h2>
+            <div id="ordersList">
+                <!-- Orders injected here -->
+            </div>
+        </div>
     </div>
 
     <!-- Cart Sidebar -->
@@ -449,6 +459,8 @@
             if (viewId === 'vendorsView' && accessToken) {
                 loadVendors();
                 loadLocations();
+            } else if (viewId === 'ordersView' && accessToken) {
+                loadOrders();
             }
         }
 
@@ -595,10 +607,63 @@
                         <div class="vendor-info">
                             <h3>${v.shop_name}</h3>
                             <p>${v.is_pickup_only ? 'Pickup Only' : 'Delivery Available'} • 20-30 min</p>
+                            <button class="btn" style="width: 100%; margin-top: 16px; padding: 10px; font-size: 0.9rem; background: var(--sand); color: var(--charcoal); border: 1px solid var(--sand-mid);">View Menu</button>
                         </div>
                     </div>
                 `;
             });
+        }
+
+        async function loadOrders() {
+            try {
+                const res = await fetchWithAuth('/shop/orders/');
+                const orders = await res.json();
+                const container = document.getElementById('ordersList');
+                container.innerHTML = '';
+                
+                if (orders.length === 0) {
+                    container.innerHTML = '<p>You have no past orders.</p>';
+                    return;
+                }
+                
+                orders.forEach(o => {
+                    // Adjust UTC time to +5:30 (Sri Lanka Time)
+                    const date = new Date(o.created_at);
+                    const localTime = new Date(date.getTime() + (5.5 * 60 * 60 * 1000));
+                    
+                    const dateString = localTime.toLocaleString('en-US', { 
+                        timeZone: 'UTC', 
+                        month: 'short', day: 'numeric', year: 'numeric', 
+                        hour: 'numeric', minute: '2-digit', hour12: true 
+                    });
+                    
+                    let itemsHtml = '';
+                    o.items.forEach(i => {
+                        itemsHtml += `<div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                            <span>${i.quantity}x ${i.product_name || 'Product'}</span>
+                            <span style="color: var(--mid-grey);">LKR ${i.price_at_purchase}</span>
+                        </div>`;
+                    });
+                    
+                    container.innerHTML += `
+                        <div class="card" style="margin-bottom: 20px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--sand-mid); padding-bottom: 12px; margin-bottom: 12px;">
+                                <h3 style="margin: 0; font-family: var(--sans);">Order #${o.id.toString().padStart(4, '0')} <br><small style="font-weight: normal; color: var(--mid-grey); font-size: 0.9rem;">${o.shop_name || 'Vendor'}</small></h3>
+                                <span style="background: ${o.status === 'pending' ? '#fff3cd' : (o.status === 'delivered' ? '#d4edda' : '#e2e3e5')}; color: ${o.status === 'pending' ? '#856404' : (o.status === 'delivered' ? '#155724' : '#383d41')}; padding: 6px 12px; border-radius: 20px; font-weight: 600; font-size: 0.85rem; text-transform: capitalize;">${o.status.replace('_', ' ')}</span>
+                            </div>
+                            <p style="color: var(--mid-grey); font-size: 0.85rem; margin-bottom: 15px;">Placed on: ${dateString}</p>
+                            <div style="margin-bottom: 15px; border-bottom: 1px solid var(--sand-mid); padding-bottom: 15px;">
+                                ${itemsHtml}
+                            </div>
+                            <div style="font-weight: 600; text-align: right; font-size: 1.1rem;">
+                                Total: LKR ${o.total_amount}
+                            </div>
+                        </div>
+                    `;
+                });
+            } catch (e) {
+                console.error("Failed to load orders", e);
+            }
         }
 
         async function loadVendorDetails(id, name, coverImg) {
@@ -724,10 +789,11 @@
                     toggleCart();
                     showView('vendorsView');
                 } else {
-                    alert("Failed to place order. Ensure product data matches database.");
+                    const errData = await res.json();
+                    alert("Failed to place order: " + JSON.stringify(errData));
                 }
             } catch (e) {
-                alert("Error placing order.");
+                alert("Error placing order: " + e.message);
             }
         }
     </script>
