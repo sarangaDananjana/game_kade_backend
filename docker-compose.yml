@@ -12,8 +12,5 @@ services:
     command: sh -c "python manage.py collectstatic --noinput && python manage.py migrate && gunicorn food_delivery.wsgi:application --bind 0.0.0.0:8000"
     restart: always
     volumes:
-      - media_data:/app/media
+      - ./media:/app/media
       - ./staticfiles:/app/staticfiles
-
-volumes:
-  media_data:
