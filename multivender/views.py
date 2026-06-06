@@ -18,12 +18,22 @@ class OrderLocationListView(generics.ListAPIView):
     serializer_class = OrderLocationSerializer
     permission_classes = [permissions.AllowAny]
 
+from django.utils import timezone
+from datetime import timedelta
+from rest_framework.exceptions import ValidationError
+
 class OrderCreateView(generics.CreateAPIView):
     queryset = Order.objects.all()
     serializer_class = OrderSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def perform_create(self, serializer):
+        now_utc = timezone.now()
+        sl_time = now_utc + timedelta(hours=5, minutes=30)
+        
+        if not (13 <= sl_time.hour < 17):
+            raise ValidationError("We are currently closed. Orders are only accepted between 1:00 PM and 5:00 PM.")
+            
         serializer.save(user=self.request.user)
 
 class OrderListView(generics.ListAPIView):
