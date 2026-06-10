@@ -8,6 +8,9 @@ services:
       - .env.prod
     ports:
       - "127.0.0.1:8000:8000"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     # This command collects static files, runs migrations, and then starts gunicorn
     command: sh -c "python manage.py collectstatic --noinput && python manage.py migrate && gunicorn food_delivery.wsgi:application --bind 0.0.0.0:8000"
     restart: always
