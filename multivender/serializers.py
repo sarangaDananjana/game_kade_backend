@@ -14,7 +14,7 @@ class VendorSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Vendor
-        fields = ['id', 'shop_name', 'logo', 'cover_image', 'lat', 'lng', 'is_pickup_only', 'is_active', 'products']
+        fields = ['id', 'shop_name', 'logo', 'cover_image', 'district', 'lat', 'lng', 'is_pickup_only', 'is_active', 'products']
 
 class OrderItemSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
@@ -27,7 +27,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
 class OrderLocationSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderLocation
-        fields = ['id', 'name', 'lat', 'lng', 'description', 'unique_identity', 'is_system_defined']
+        fields = ['id', 'name', 'district', 'lat', 'lng', 'description', 'unique_identity', 'is_system_defined']
 
 class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True)
