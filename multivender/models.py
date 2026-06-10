@@ -3,6 +3,34 @@ from django.conf import settings  # Import settings to access the User model saf
 from django.contrib.gis.db import models
 from django.contrib.gis.geos import Point
 
+DISTRICT_CHOICES = (
+    ('Ampara', 'Ampara'),
+    ('Anuradhapura', 'Anuradhapura'),
+    ('Badulla', 'Badulla'),
+    ('Batticaloa', 'Batticaloa'),
+    ('Colombo', 'Colombo'),
+    ('Galle', 'Galle'),
+    ('Gampaha', 'Gampaha'),
+    ('Hambantota', 'Hambantota'),
+    ('Jaffna', 'Jaffna'),
+    ('Kalutara', 'Kalutara'),
+    ('Kandy', 'Kandy'),
+    ('Kegalle', 'Kegalle'),
+    ('Kilinochchi', 'Kilinochchi'),
+    ('Kurunegala', 'Kurunegala'),
+    ('Mannar', 'Mannar'),
+    ('Matale', 'Matale'),
+    ('Matara', 'Matara'),
+    ('Monaragala', 'Monaragala'),
+    ('Mullaitivu', 'Mullaitivu'),
+    ('Nuwara Eliya', 'Nuwara Eliya'),
+    ('Polonnaruwa', 'Polonnaruwa'),
+    ('Puttalam', 'Puttalam'),
+    ('Ratnapura', 'Ratnapura'),
+    ('Trincomalee', 'Trincomalee'),
+    ('Vavuniya', 'Vavuniya'),
+)
+
 # ------------------------------------------------------------------------
 # Delivery Zone
 # ------------------------------------------------------------------------
@@ -27,6 +55,8 @@ class Vendor(models.Model):
 
     logo = models.ImageField(upload_to='vendor_logos/', blank=True, null=True)
     cover_image = models.ImageField(upload_to='vendor_covers/', blank=True, null=True)
+
+    district = models.CharField(max_length=50, choices=DISTRICT_CHOICES, blank=True, null=True)
 
     lat = models.FloatField(help_text="Latitude coordinate")
     lng = models.FloatField(help_text="Longitude coordinate")
@@ -87,6 +117,7 @@ class OrderLocation(models.Model):
                              related_name='multivendor_locations', null=True, blank=True)
     name = models.CharField(
         max_length=255, help_text="e.g., University Canteen, My Boarding")
+    district = models.CharField(max_length=50, choices=DISTRICT_CHOICES, blank=True, null=True)
     lat = models.FloatField(help_text="Latitude coordinate")
     lng = models.FloatField(help_text="Longitude coordinate")
     location_point = models.PointField(null=True, blank=True, geography=True)
