@@ -155,3 +155,24 @@ class AppVersionView(APIView):
                 'link': latest_version.link
             }, status=status.HTTP_200_OK)
         return Response({'error': 'No version information found.'}, status=status.HTTP_404_NOT_FOUND)
+
+class ProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        return Response({
+            'name': user.name or "",
+            'phone': user.phone_number,
+            'role': user.role
+        }, status=status.HTTP_200_OK)
+
+    def put(self, request):
+        user = request.user
+        user.name = request.data.get('name', user.name)
+        user.save()
+        return Response({
+            'name': user.name or "",
+            'phone': user.phone_number,
+            'role': user.role
+        }, status=status.HTTP_200_OK)

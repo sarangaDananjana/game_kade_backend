@@ -192,6 +192,20 @@
             box-shadow: 0 4px 16px rgba(0,0,0,0.08);
         }
 
+        .product-card.unavailable {
+            opacity: 0.6;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .product-card.unavailable:hover {
+            box-shadow: none;
+        }
+
+        .product-card.unavailable .product-image {
+            filter: grayscale(100%);
+        }
+
         .product-info {
             flex-grow: 1;
             padding-right: 16px;
@@ -737,16 +751,19 @@
                 vendor.products.forEach(p => {
                     const imgStyle = p.image ? `background-image: url('${p.image}')` : `background-color: var(--sand-mid)`;
                     const desc = p.description ? p.description : '';
+                    const isAvailable = p.is_available !== false;
+                    const cardClass = isAvailable ? "product-card" : "product-card unavailable";
                     
                     grid.innerHTML += `
-                        <div class="product-card">
+                        <div class="${cardClass}">
                             <div class="product-info">
                                 <h3>${p.name}</h3>
                                 <p class="product-desc">${desc}</p>
                                 <p class="product-price">LKR ${p.price}</p>
+                                ${!isAvailable ? '<p style="color: var(--terracotta); font-size: 0.85rem; font-weight: 600; margin-top: 5px;">Currently Unavailable</p>' : ''}
                             </div>
                             <div class="product-image" style="${imgStyle}">
-                                <button class="add-btn" onclick="addToCart(${p.id}, '${p.name.replace(/'/g, "\\'")}', ${p.price}, ${vendor.id})">Add</button>
+                                ${isAvailable ? `<button class="add-btn" onclick="addToCart(${p.id}, '${p.name.replace(/'/g, "\\'")}', ${p.price}, ${vendor.id})">Add</button>` : ''}
                             </div>
                         </div>
                     `;

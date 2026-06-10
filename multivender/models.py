@@ -125,8 +125,8 @@ class Order(models.Model):
         Vendor, on_delete=models.CASCADE, related_name='orders')
     location = models.ForeignKey(
         OrderLocation, on_delete=models.SET_NULL, null=True)
-    zone = models.ForeignKey(DeliveryZone, on_delete=models.SET_NULL,
-                             null=True, blank=True, related_name='orders')
+    zone = models.ForeignKey('orders.DeliveryZone', on_delete=models.SET_NULL,
+                             null=True, blank=True, related_name='multivendor_orders')
     rider = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
                               null=True, blank=True, related_name='multivendor_assigned_deliveries')
 
