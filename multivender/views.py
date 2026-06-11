@@ -1,5 +1,5 @@
 from django.shortcuts import render
-from rest_framework import generics, permissions
+from rest_framework import generics, permissions, viewsets
 from .models import Vendor, Order, OrderLocation
 from .serializers import VendorSerializer, OrderSerializer, OrderLocationSerializer
 
@@ -13,10 +13,23 @@ class VendorDetailView(generics.RetrieveAPIView):
     serializer_class = VendorSerializer
     permission_classes = [permissions.AllowAny]
 
-class OrderLocationListView(generics.ListAPIView):
-    queryset = OrderLocation.objects.filter(is_system_defined=True)
+from django.db.models import Q
+from rest_framework.permissions import IsAuthenticatedOrReadOnly
+
+class OrderLocationViewSet(viewsets.ModelViewSet):
     serializer_class = OrderLocationSerializer
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_authenticated:
+            return OrderLocation.objects.filter(
+                Q(is_system_defined=True) | Q(user=user)
+            )
+        return OrderLocation.objects.filter(is_system_defined=True)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user, is_system_defined=False)
 
 from django.utils import timezone
 from datetime import timedelta
