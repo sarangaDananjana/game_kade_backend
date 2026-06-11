@@ -27,7 +27,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
 class OrderLocationSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderLocation
-        fields = ['id', 'name', 'district', 'lat', 'lng', 'description', 'unique_identity', 'is_system_defined']
+        fields = ['id', 'name', 'district', 'lat', 'lng', 'description', 'unique_identity', 'is_system_defined', 'user']
         read_only_fields = ['user', 'is_system_defined']
 
 class OrderSerializer(serializers.ModelSerializer):
