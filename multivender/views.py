@@ -8,6 +8,16 @@ class VendorListView(generics.ListAPIView):
     serializer_class = VendorSerializer
     permission_classes = [permissions.AllowAny]
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        order_location_id = self.request.query_params.get('order_location_id')
+        if order_location_id:
+            try:
+                context['order_location'] = OrderLocation.objects.get(id=order_location_id)
+            except OrderLocation.DoesNotExist:
+                pass
+        return context
+
 class VendorDetailView(generics.RetrieveAPIView):
     queryset = Vendor.objects.filter(is_active=True)
     serializer_class = VendorSerializer

@@ -18,3 +18,4 @@ whitenoise>=6.6.0
 pytz==2024.1
 pymongo>=4.0.0
 dnspython>=2.0.0
+h3>=4.1.2

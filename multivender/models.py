@@ -1,4 +1,5 @@
 import uuid
+import h3
 from django.conf import settings  # Import settings to access the User model safely
 from django.contrib.gis.db import models
 from django.contrib.gis.geos import Point
@@ -43,6 +44,20 @@ class DeliveryZone(models.Model):
         return self.name
 
 # ------------------------------------------------------------------------
+# Delivery Pricing Model
+# ------------------------------------------------------------------------
+
+class DeliveryDistanceTier(models.Model):
+    grid_distance = models.PositiveIntegerField(
+        unique=True, 
+        help_text="H3 grid distance (0 for same tile, 1 for adjacent, etc.)"
+    )
+    delivery_fee = models.DecimalField(max_digits=10, decimal_places=2)
+    
+    def __str__(self):
+        return f"Distance {self.grid_distance} (R{self.grid_distance + 1}) - Rs {self.delivery_fee}"
+
+# ------------------------------------------------------------------------
 # Vendor Model
 # ------------------------------------------------------------------------
 
@@ -61,6 +76,7 @@ class Vendor(models.Model):
     lat = models.FloatField(help_text="Latitude coordinate")
     lng = models.FloatField(help_text="Longitude coordinate")
     location_point = models.PointField(null=True, blank=True, geography=True)
+    h3_index = models.CharField(max_length=15, blank=True, null=True, help_text="H3 spatial index (Resolution 7)")
 
     is_pickup_only = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
@@ -69,6 +85,10 @@ class Vendor(models.Model):
     def save(self, *args, **kwargs):
         if self.lat and self.lng:
             self.location_point = Point(self.lng, self.lat)
+            try:
+                self.h3_index = h3.latlng_to_cell(self.lat, self.lng, 7)
+            except AttributeError:
+                self.h3_index = h3.geo_to_h3(self.lat, self.lng, 7)
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -121,6 +141,7 @@ class OrderLocation(models.Model):
     lat = models.FloatField(help_text="Latitude coordinate")
     lng = models.FloatField(help_text="Longitude coordinate")
     location_point = models.PointField(null=True, blank=True, geography=True)
+    h3_index = models.CharField(max_length=15, blank=True, null=True, help_text="H3 spatial index (Resolution 7)")
     description = models.TextField(
         help_text="Landmark or additional details", blank=True, null=True)
     unique_identity = models.CharField(
@@ -130,6 +151,10 @@ class OrderLocation(models.Model):
     def save(self, *args, **kwargs):
         if self.lat and self.lng:
             self.location_point = Point(self.lng, self.lat)
+            try:
+                self.h3_index = h3.latlng_to_cell(self.lat, self.lng, 7)
+            except AttributeError:
+                self.h3_index = h3.geo_to_h3(self.lat, self.lng, 7)
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -164,6 +189,7 @@ class Order(models.Model):
     status = models.CharField(
         max_length=20, choices=STATUS_CHOICES, default='pending')
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    delivery_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     delivery_code = models.UUIDField(
         default=uuid.uuid4, editable=False, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
