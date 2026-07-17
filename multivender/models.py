@@ -76,7 +76,7 @@ class Vendor(models.Model):
     lat = models.FloatField(help_text="Latitude coordinate")
     lng = models.FloatField(help_text="Longitude coordinate")
     location_point = models.PointField(null=True, blank=True, geography=True)
-    h3_index = models.CharField(max_length=15, blank=True, null=True, help_text="H3 spatial index (Resolution 7)")
+    h3_index = models.CharField(max_length=15, blank=True, null=True, help_text="H3 spatial index (Resolution 8)")
 
     is_pickup_only = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
@@ -86,9 +86,9 @@ class Vendor(models.Model):
         if self.lat and self.lng:
             self.location_point = Point(self.lng, self.lat)
             try:
-                self.h3_index = h3.latlng_to_cell(self.lat, self.lng, 7)
+                self.h3_index = h3.latlng_to_cell(self.lat, self.lng, 8)
             except AttributeError:
-                self.h3_index = h3.geo_to_h3(self.lat, self.lng, 7)
+                self.h3_index = h3.geo_to_h3(self.lat, self.lng, 8)
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -141,7 +141,7 @@ class OrderLocation(models.Model):
     lat = models.FloatField(help_text="Latitude coordinate")
     lng = models.FloatField(help_text="Longitude coordinate")
     location_point = models.PointField(null=True, blank=True, geography=True)
-    h3_index = models.CharField(max_length=15, blank=True, null=True, help_text="H3 spatial index (Resolution 7)")
+    h3_index = models.CharField(max_length=15, blank=True, null=True, help_text="H3 spatial index (Resolution 8)")
     description = models.TextField(
         help_text="Landmark or additional details", blank=True, null=True)
     unique_identity = models.CharField(
@@ -152,9 +152,9 @@ class OrderLocation(models.Model):
         if self.lat and self.lng:
             self.location_point = Point(self.lng, self.lat)
             try:
-                self.h3_index = h3.latlng_to_cell(self.lat, self.lng, 7)
+                self.h3_index = h3.latlng_to_cell(self.lat, self.lng, 8)
             except AttributeError:
-                self.h3_index = h3.geo_to_h3(self.lat, self.lng, 7)
+                self.h3_index = h3.geo_to_h3(self.lat, self.lng, 8)
         super().save(*args, **kwargs)
 
     def __str__(self):
