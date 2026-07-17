@@ -84,7 +84,7 @@ class OrderSerializer(serializers.ModelSerializer):
         if order_location and vendor:
             from multivender.services.pricing import calculate_delivery_fee
             try:
-                delivery_fee = calculate_delivery_fee(vendor, order_location)
+                delivery_fee = calculate_delivery_fee(vendor, order_location, subtotal=total_amount)
             except ValueError as e:
                 raise serializers.ValidationError({"location": str(e)})
 
