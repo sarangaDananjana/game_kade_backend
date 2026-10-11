@@ -59,36 +59,47 @@ class OrderLocationSerializer(serializers.ModelSerializer):
 class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True)
     location = serializers.PrimaryKeyRelatedField(queryset=OrderLocation.objects.all(), required=False, allow_null=True)
+    location_name = serializers.CharField(source='location.name', read_only=True, allow_null=True)
     shop_name = serializers.CharField(source='vendor.shop_name', read_only=True)
+    subtotal = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
-        fields = ['id', 'vendor', 'shop_name', 'location', 'status', 'total_amount', 'delivery_fee', 'delivery_code', 'created_at', 'items']
-        read_only_fields = ['status', 'delivery_code', 'created_at', 'total_amount', 'delivery_fee']
+        fields = ['id', 'vendor', 'shop_name', 'location', 'location_name', 'status', 'subtotal', 'total_amount', 'delivery_fee', 'delivery_code', 'created_at', 'items']
+        read_only_fields = ['status', 'delivery_code', 'created_at', 'total_amount', 'delivery_fee', 'subtotal']
+
+    def get_subtotal(self, obj):
+        return sum(item.price_at_purchase * item.quantity for item in obj.items.all())
 
     def create(self, validated_data):
         items_data = validated_data.pop('items')
         user = validated_data.pop('user', self.context['request'].user)
 
-        # Calculate total amount
-        total_amount = 0
-        for item_data in items_data:
-            product = item_data['product']
-            total_amount += product.price * item_data['quantity']
+        # Calculate items subtotal
+        subtotal = sum(item_data['product'].price * item_data['quantity'] for item_data in items_data)
 
         # Calculate Delivery Fee
-        delivery_fee = 0
         order_location = validated_data.get('location')
         vendor = validated_data.get('vendor')
         
+        # Fallback to user's saved location if not provided
+        if not order_location:
+            order_location = OrderLocation.objects.filter(user=user).order_by('-id').first()
+            if order_location:
+                validated_data['location'] = order_location
+
+        if not order_location:
+            raise serializers.ValidationError({"location": "A delivery location is required to calculate delivery charge and place an order."})
+
+        delivery_fee = 0
         if order_location and vendor:
             from multivender.services.pricing import calculate_delivery_fee
             try:
-                delivery_fee = calculate_delivery_fee(vendor, order_location, subtotal=total_amount)
+                delivery_fee = calculate_delivery_fee(vendor, order_location, subtotal=subtotal)
             except ValueError as e:
                 raise serializers.ValidationError({"location": str(e)})
 
-        total_amount += delivery_fee
+        total_amount = subtotal + delivery_fee
 
         # Create Order
         order = Order.objects.create(user=user, total_amount=total_amount, delivery_fee=delivery_fee, **validated_data)

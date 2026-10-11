@@ -76,5 +76,22 @@ class OrderListView(generics.ListAPIView):
     def get_queryset(self):
         return Order.objects.filter(user=self.request.user).order_by('-created_at')
 
+class OrderDetailView(generics.RetrieveUpdateAPIView):
+    serializer_class = OrderSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Order.objects.filter(user=self.request.user)
+
+    def perform_update(self, serializer):
+        instance = self.get_object()
+        new_status = self.request.data.get('status')
+        if new_status == 'cancelled':
+            if instance.status != 'pending':
+                raise ValidationError("Cannot cancel order that is already being prepared or out for delivery.")
+            serializer.save(status='cancelled')
+        else:
+            raise ValidationError("You can only cancel pending orders.")
+
 def multivendor_web_view(request):
     return render(request, 'multivendor_app.html')
