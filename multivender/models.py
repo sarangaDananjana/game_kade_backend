@@ -4,10 +4,9 @@ from django.conf import settings  # Import settings to access the User model saf
 from django.contrib.gis.db import models
 from django.contrib.gis.geos import Point
 
-DISTRICT_CHOICES = (
-    
-    ('Matara', 'Matara')
-)
+DISTRICT_CHOICES = [
+    ('Matara', 'Matara'),
+]
 
 # ------------------------------------------------------------------------
 # Delivery Zone
