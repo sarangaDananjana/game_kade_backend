@@ -1,0 +1,1664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Kade MultiVendor — Dispatch Command Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-base: #090e0c;
+            --bg-surface: #101915;
+            --bg-card: rgba(22, 35, 30, 0.7);
+            --bg-card-hover: rgba(28, 45, 38, 0.9);
+            --border-glass: rgba(52, 211, 153, 0.12);
+            --border-subtle: rgba(255, 255, 255, 0.06);
+            --primary: #10b981;
+            --primary-glow: rgba(16, 185, 129, 0.2);
+            --primary-dark: #059669;
+            --secondary: #06b6d4;
+            --violet: #8b5cf6;
+            --amber: #f59e0b;
+            --danger: #ef4444;
+            --text-main: #f9fafb;
+            --text-secondary: #cbd5e1;
+            --text-muted: #94a3b8;
+            --radius-lg: 20px;
+            --radius-md: 14px;
+            --radius-sm: 8px;
+            --shadow-card: 0 10px 30px -5px rgba(0, 0, 0, 0.5);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(16, 185, 129, 0.08) 0px, transparent 40%),
+                radial-gradient(at 100% 0%, rgba(6, 182, 212, 0.06) 0px, transparent 40%),
+                radial-gradient(at 50% 100%, rgba(139, 92, 246, 0.05) 0px, transparent 50%);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding-bottom: 120px;
+        }
+
+        /* Top Navigation Header */
+        header.top-nav {
+            background: rgba(16, 25, 21, 0.85);
+            backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--border-glass);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            padding: 14px 28px;
+        }
+
+        .nav-container {
+            max-width: 1440px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .brand-box {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .brand-logo-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: #ffffff;
+            box-shadow: 0 4px 14px var(--primary-glow);
+        }
+
+        .brand-text h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 19px;
+            font-weight: 700;
+            letter-spacing: -0.3px;
+            color: #ffffff;
+        }
+
+        .brand-text h1 span {
+            color: var(--primary);
+        }
+
+        .brand-text p {
+            font-size: 12px;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .nav-actions {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .time-pill {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border-subtle);
+            border-radius: 9999px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .time-pill i {
+            color: var(--secondary);
+        }
+
+        .user-chip {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 14px;
+            background: rgba(16, 185, 129, 0.08);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            border-radius: 9999px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #d1fae5;
+        }
+
+        .user-chip i {
+            color: var(--primary);
+        }
+
+        .btn-ghost {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+            padding: 8px 14px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            text-decoration: none;
+        }
+
+        .btn-ghost:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+        }
+
+        /* Main Container */
+        .dashboard-body {
+            max-width: 1440px;
+            margin: 28px auto 0;
+            padding: 0 24px;
+        }
+
+        /* KPI Metrics Grid */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 18px;
+            margin-bottom: 28px;
+        }
+
+        .kpi-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-lg);
+            padding: 22px;
+            box-shadow: var(--shadow-card);
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .kpi-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(52, 211, 153, 0.3);
+        }
+
+        .kpi-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+        }
+
+        .kpi-card.total::after { background: var(--secondary); }
+        .kpi-card.system::after { background: var(--primary); }
+        .kpi-card.custom::after { background: var(--violet); }
+        .kpi-card.unassigned::after { background: var(--amber); }
+
+        .kpi-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .kpi-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .kpi-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+
+        .kpi-card.total .kpi-icon { background: rgba(6, 182, 212, 0.15); color: var(--secondary); }
+        .kpi-card.system .kpi-icon { background: rgba(16, 185, 129, 0.15); color: var(--primary); }
+        .kpi-card.custom .kpi-icon { background: rgba(139, 92, 246, 0.15); color: var(--violet); }
+        .kpi-card.unassigned .kpi-icon { background: rgba(245, 158, 11, 0.15); color: var(--amber); }
+
+        .kpi-value {
+            font-family: 'Outfit', sans-serif;
+            font-size: 32px;
+            font-weight: 800;
+            color: #ffffff;
+            line-height: 1;
+            margin-bottom: 6px;
+        }
+
+        .kpi-desc {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        /* Riders Panel */
+        .section-riders {
+            background: var(--bg-card);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-lg);
+            padding: 20px 24px;
+            margin-bottom: 30px;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .section-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 17px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #ffffff;
+        }
+
+        .section-title i {
+            color: var(--primary);
+        }
+
+        .riders-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 14px;
+        }
+
+        .rider-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 14px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .rider-card:hover {
+            background: rgba(16, 185, 129, 0.06);
+            border-color: rgba(16, 185, 129, 0.3);
+            transform: translateY(-1px);
+        }
+
+        .rider-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .rider-avatar {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(6, 182, 212, 0.3));
+            border: 1px solid rgba(16, 185, 129, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .rider-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: #ffffff;
+            margin-bottom: 2px;
+        }
+
+        .rider-phone {
+            font-size: 12px;
+            color: var(--text-muted);
+            text-decoration: none;
+        }
+
+        .rider-badge {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--primary);
+            border: 1px solid rgba(16, 185, 129, 0.25);
+            padding: 4px 10px;
+            border-radius: 9999px;
+            font-size: 12px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        /* Filter Controls & Search Bar */
+        .controls-bar {
+            background: var(--bg-card);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-lg);
+            padding: 16px 20px;
+            margin-bottom: 28px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .filter-tabs {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .filter-tab {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border-subtle);
+            border-radius: 10px;
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .filter-tab:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #ffffff;
+        }
+
+        .filter-tab.active {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: #ffffff;
+            box-shadow: 0 4px 12px var(--primary-glow);
+        }
+
+        .filter-tab .badge {
+            background: rgba(0, 0, 0, 0.25);
+            padding: 2px 7px;
+            border-radius: 9999px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .search-wrap {
+            position: relative;
+            flex: 1;
+            min-width: 260px;
+            max-width: 380px;
+        }
+
+        .search-wrap input {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border-subtle);
+            border-radius: 10px;
+            padding: 9px 14px 9px 38px;
+            font-size: 13px;
+            color: #ffffff;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        .search-wrap input:focus {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-glow);
+        }
+
+        .search-wrap i {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        /* Groups Container */
+        .groups-container {
+            display: flex;
+            flex-direction: column;
+            gap: 36px;
+        }
+
+        .group-section {
+            background: var(--bg-card);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-glass);
+            overflow: hidden;
+            box-shadow: var(--shadow-card);
+        }
+
+        .group-header {
+            padding: 20px 28px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .group-header.system {
+            background: linear-gradient(90deg, rgba(16, 185, 129, 0.15), rgba(6, 182, 212, 0.08));
+            border-bottom: 1px solid rgba(16, 185, 129, 0.2);
+        }
+
+        .group-header.custom {
+            background: linear-gradient(90deg, rgba(139, 92, 246, 0.15), rgba(245, 158, 11, 0.08));
+            border-bottom: 1px solid rgba(139, 92, 246, 0.2);
+        }
+
+        .group-title-box {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .group-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .group-header.system .group-icon {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--primary);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .group-header.custom .group-icon {
+            background: rgba(139, 92, 246, 0.2);
+            color: var(--violet);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+        }
+
+        .group-heading {
+            font-family: 'Outfit', sans-serif;
+            font-size: 19px;
+            font-weight: 700;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .group-subheading {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .group-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn-select-all {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid var(--border-subtle);
+            color: #ffffff;
+            padding: 8px 14px;
+            border-radius: 9px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-select-all:hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        /* Order Cards Grid */
+        .orders-grid {
+            padding: 24px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 18px;
+        }
+
+        .order-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .order-card:hover {
+            background: rgba(255, 255, 255, 0.04);
+            border-color: rgba(255, 255, 255, 0.15);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+        }
+
+        .order-card.selected {
+            border-color: var(--primary);
+            background: rgba(16, 185, 129, 0.05);
+            box-shadow: 0 0 0 1px var(--primary);
+        }
+
+        .card-top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .checkbox-wrap {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .order-checkbox {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--primary);
+            cursor: pointer;
+        }
+
+        .order-id {
+            font-family: 'Outfit', sans-serif;
+            font-size: 16px;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .order-time {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-left: 4px;
+        }
+
+        .status-pill {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 9999px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-pending { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+        .status-preparing { background: rgba(6, 182, 212, 0.15); color: #38bdf8; border: 1px solid rgba(6, 182, 212, 0.3); }
+        .status-out_for_delivery { background: rgba(139, 92, 246, 0.15); color: #c084fc; border: 1px solid rgba(139, 92, 246, 0.3); }
+        .status-delivered { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .status-cancelled { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+
+        .vendor-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            padding: 5px 10px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #e2e8f0;
+        }
+
+        .vendor-badge i {
+            color: var(--secondary);
+        }
+
+        .card-details {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            font-size: 13px;
+        }
+
+        .detail-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-secondary);
+        }
+
+        .detail-row i {
+            width: 16px;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        .customer-phone-link {
+            color: var(--secondary);
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .customer-phone-link:hover {
+            text-decoration: underline;
+        }
+
+        .location-highlight {
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid var(--border-subtle);
+            border-radius: 10px;
+            padding: 10px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .location-name {
+            font-weight: 700;
+            color: #ffffff;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .location-name i {
+            color: var(--primary);
+        }
+
+        .location-landmark {
+            font-size: 11px;
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        .location-desc {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .items-preview {
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 12px;
+            color: var(--text-muted);
+            max-height: 80px;
+            overflow-y: auto;
+        }
+
+        .item-line {
+            display: flex;
+            justify-content: space-between;
+            padding: 2px 0;
+        }
+
+        .card-pricing {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-top: 1px solid var(--border-subtle);
+            padding-top: 10px;
+        }
+
+        .amount-total {
+            font-family: 'Outfit', sans-serif;
+            font-size: 16px;
+            font-weight: 800;
+            color: #ffffff;
+        }
+
+        .fee-tag {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        /* Rider Assignment Dropdown in card */
+        .card-assignment {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding-top: 8px;
+            border-top: 1px dashed var(--border-subtle);
+        }
+
+        .rider-assigned-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #34d399;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.25);
+            padding: 4px 10px;
+            border-radius: 9999px;
+        }
+
+        .rider-unassigned-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #fbbf24;
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.25);
+            padding: 4px 10px;
+            border-radius: 9999px;
+        }
+
+        .quick-rider-select {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            color: #ffffff;
+            font-size: 12px;
+            padding: 4px 8px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .quick-rider-select option {
+            background: #111827;
+            color: #ffffff;
+        }
+
+        /* Empty State */
+        .empty-state {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 48px 24px;
+            color: var(--text-muted);
+        }
+
+        .empty-state i {
+            font-size: 42px;
+            margin-bottom: 14px;
+            opacity: 0.4;
+        }
+
+        /* Floating Assignment Bar (When Orders are Selected) */
+        .floating-assign-bar {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(120px);
+            background: rgba(16, 25, 21, 0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(52, 211, 153, 0.35);
+            border-radius: 9999px;
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7), 0 0 25px var(--primary-glow);
+            z-index: 1000;
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .floating-assign-bar.visible {
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .selection-count {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 700;
+            color: #ffffff;
+            white-space: nowrap;
+        }
+
+        .selection-badge {
+            background: var(--primary);
+            color: #000000;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        .rider-selector-dropdown {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 12px;
+            padding: 10px 16px;
+            color: #ffffff;
+            font-size: 14px;
+            font-weight: 600;
+            outline: none;
+            cursor: pointer;
+            min-width: 200px;
+        }
+
+        .rider-selector-dropdown option {
+            background: #111827;
+            color: #ffffff;
+        }
+
+        .btn-assign-main {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            border: none;
+            border-radius: 9999px;
+            padding: 11px 24px;
+            font-size: 14px;
+            font-weight: 700;
+            color: #ffffff;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 14px var(--primary-glow);
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .btn-assign-main:hover {
+            transform: scale(1.03);
+            filter: brightness(1.1);
+        }
+
+        .btn-clear-selection {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 13px;
+            cursor: pointer;
+            padding: 4px 8px;
+            transition: color 0.2s;
+        }
+
+        .btn-clear-selection:hover {
+            color: #ffffff;
+        }
+
+        /* Toast Notification */
+        .toast-notification {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            background: #111827;
+            border: 1px solid var(--border-glass);
+            border-radius: 14px;
+            padding: 14px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            z-index: 2000;
+            transform: translateX(120%);
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .toast-notification.show {
+            transform: translateX(0);
+        }
+
+        .toast-notification.success {
+            border-color: var(--primary);
+            color: #34d399;
+        }
+
+        .toast-notification.error {
+            border-color: var(--danger);
+            color: #f87171;
+        }
+
+        /* Responsive tweaks */
+        @media (max-width: 900px) {
+            .orders-grid {
+                grid-template-columns: 1fr;
+            }
+            .floating-assign-bar {
+                width: 90%;
+                border-radius: 20px;
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header Navigation -->
+    <header class="top-nav">
+        <div class="nav-container">
+            <div class="brand-box">
+                <div class="brand-logo-icon">
+                    <i class="fa-solid fa-store"></i>
+                </div>
+                <div class="brand-text">
+                    <h1>Game Kade <span>MultiVendor</span></h1>
+                    <p>Order Dispatch & Logistics Command Center</p>
+                </div>
+            </div>
+
+            <div class="nav-actions">
+                <div class="time-pill">
+                    <i class="fa-regular fa-clock"></i>
+                    <span id="liveTime">Loading...</span>
+                </div>
+
+                <div class="user-chip">
+                    <i class="fa-solid fa-shield-halved"></i>
+                    <span>Admin: {{ admin_user.name|default:admin_user.phone_number }}</span>
+                </div>
+
+                <button class="btn-ghost" id="refreshBtn" onclick="fetchOrdersData(true)">
+                    <i class="fa-solid fa-rotate"></i>
+                    <span>Refresh</span>
+                </button>
+
+                <a href="{% url 'multivendor-admin-logout' %}" class="btn-ghost" style="color: #f87171;">
+                    <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                    <span>Logout</span>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard-body">
+
+        <!-- Top KPI Metrics -->
+        <section class="metrics-grid">
+            <div class="kpi-card total">
+                <div class="kpi-header">
+                    <span class="kpi-label">Today's Orders</span>
+                    <div class="kpi-icon"><i class="fa-solid fa-box-open"></i></div>
+                </div>
+                <div class="kpi-value" id="kpiTotalOrders">0</div>
+                <div class="kpi-desc" id="kpiDateStr">Loading date...</div>
+            </div>
+
+            <div class="kpi-card system">
+                <div class="kpi-header">
+                    <span class="kpi-label">System Locations</span>
+                    <div class="kpi-icon"><i class="fa-solid fa-building-columns"></i></div>
+                </div>
+                <div class="kpi-value" id="kpiSystemOrders">0</div>
+                <div class="kpi-desc">Orders to University / Institutional Hubs</div>
+            </div>
+
+            <div class="kpi-card custom">
+                <div class="kpi-header">
+                    <span class="kpi-label">Custom Locations</span>
+                    <div class="kpi-icon"><i class="fa-solid fa-location-dot"></i></div>
+                </div>
+                <div class="kpi-value" id="kpiCustomOrders">0</div>
+                <div class="kpi-desc">Orders to Boarding Houses & Private Addresses</div>
+            </div>
+
+            <div class="kpi-card unassigned">
+                <div class="kpi-header">
+                    <span class="kpi-label">Awaiting Riders</span>
+                    <div class="kpi-icon"><i class="fa-solid fa-motorcycle"></i></div>
+                </div>
+                <div class="kpi-value" id="kpiUnassigned">0</div>
+                <div class="kpi-desc">Orders currently not assigned to any rider</div>
+            </div>
+        </section>
+
+        <!-- Registered Available Riders Panel -->
+        <section class="section-riders">
+            <div class="section-header">
+                <h2 class="section-title">
+                    <i class="fa-solid fa-helmet-safety"></i>
+                    <span>Registered Riders Available on Platform</span>
+                    <span class="badge" id="ridersCountBadge" style="background: rgba(16,185,129,0.2); color: var(--primary); padding: 3px 10px; border-radius: 9999px; font-size: 13px;">0 online</span>
+                </h2>
+                <span style="font-size: 12px; color: var(--text-muted);">Click a rider to filter their assigned deliveries</span>
+            </div>
+            <div class="riders-list" id="ridersListContainer">
+                <!-- Rendered dynamically -->
+            </div>
+        </section>
+
+        <!-- Controls Toolbar -->
+        <section class="controls-bar">
+            <div class="filter-tabs">
+                <button class="filter-tab active" onclick="setFilter('all', this)">
+                    <span>All Orders</span>
+                    <span class="badge" id="badgeAll">0</span>
+                </button>
+                <button class="filter-tab" onclick="setFilter('unassigned', this)">
+                    <span>⚠️ Unassigned</span>
+                    <span class="badge" id="badgeUnassigned">0</span>
+                </button>
+                <button class="filter-tab" onclick="setFilter('system', this)">
+                    <span>🏛️ System Hubs</span>
+                    <span class="badge" id="badgeSystem">0</span>
+                </button>
+                <button class="filter-tab" onclick="setFilter('custom', this)">
+                    <span>📍 Custom Addresses</span>
+                    <span class="badge" id="badgeCustom">0</span>
+                </button>
+            </div>
+
+            <div class="search-wrap">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" id="searchInput" placeholder="Search by Order ID, Customer, Shop, Landmark..." oninput="handleSearch()">
+            </div>
+        </section>
+
+        <!-- The Two Main Order Groups -->
+        <div class="groups-container">
+
+            <!-- GROUP 1: SYSTEM LOCATIONS -->
+            <section class="group-section" id="groupSystemSection">
+                <div class="group-header system">
+                    <div class="group-title-box">
+                        <div class="group-icon">
+                            <i class="fa-solid fa-building-columns"></i>
+                        </div>
+                        <div>
+                            <h2 class="group-heading">
+                                <span>Group 1: System Defined Hubs</span>
+                                <span class="badge" id="group1CountBadge" style="background: rgba(16,185,129,0.2); color: var(--primary); padding: 3px 10px; border-radius: 9999px; font-size: 13px;">0 Orders</span>
+                            </h2>
+                            <p class="group-subheading">University Canteens, Campus Gates, and institutional landmark drop-off points</p>
+                        </div>
+                    </div>
+                    <div class="group-actions">
+                        <button class="btn-select-all" onclick="toggleSelectGroup('system')">
+                            <i class="fa-regular fa-square-check"></i>
+                            <span id="btnSelectAllSystemText">Select All System Orders</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="orders-grid" id="systemOrdersGrid">
+                    <!-- Orders injected dynamically -->
+                </div>
+            </section>
+
+            <!-- GROUP 2: CUSTOM LOCATIONS -->
+            <section class="group-section" id="groupCustomSection">
+                <div class="group-header custom">
+                    <div class="group-title-box">
+                        <div class="group-icon">
+                            <i class="fa-solid fa-map-pin"></i>
+                        </div>
+                        <div>
+                            <h2 class="group-heading">
+                                <span>Group 2: Custom Drop-off Locations</span>
+                                <span class="badge" id="group2CountBadge" style="background: rgba(139,92,246,0.2); color: var(--violet); padding: 3px 10px; border-radius: 9999px; font-size: 13px;">0 Orders</span>
+                            </h2>
+                            <p class="group-subheading">Boarding houses, hostels, student private apartments & residential addresses</p>
+                        </div>
+                    </div>
+                    <div class="group-actions">
+                        <button class="btn-select-all" onclick="toggleSelectGroup('custom')">
+                            <i class="fa-regular fa-square-check"></i>
+                            <span id="btnSelectAllCustomText">Select All Custom Orders</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="orders-grid" id="customOrdersGrid">
+                    <!-- Orders injected dynamically -->
+                </div>
+            </section>
+
+        </div>
+
+    </main>
+
+    <!-- Floating Manual Assignment Bar -->
+    <div class="floating-assign-bar" id="floatingAssignBar">
+        <div class="selection-count">
+            <span class="selection-badge" id="selectedCountBadge">0</span>
+            <span id="selectedCountText">Orders Selected</span>
+        </div>
+
+        <select class="rider-selector-dropdown" id="floatingRiderSelect">
+            <option value="">-- Choose Rider to Assign --</option>
+            <!-- Injected dynamically -->
+        </select>
+
+        <button class="btn-assign-main" onclick="assignSelectedOrders()">
+            <i class="fa-solid fa-person-biking"></i>
+            <span>Assign to Rider</span>
+        </button>
+
+        <button class="btn-clear-selection" onclick="clearSelection()">
+            <i class="fa-solid fa-xmark"></i> Clear
+        </button>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast-notification" id="toastNotification">
+        <i class="fa-solid fa-circle-check" id="toastIcon"></i>
+        <span id="toastMessage">Action completed</span>
+    </div>
+
+    <script>
+        // Global state
+        let allSystemOrders = [];
+        let allCustomOrders = [];
+        let allRiders = [];
+        let selectedOrderIds = new Set();
+        let currentFilter = 'all';
+        let searchQuery = '';
+        let selectedRiderFilter = null;
+
+        // CSRF Token helper
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        const csrftoken = getCookie('csrftoken');
+
+        // Live Clock
+        function updateClock() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+            document.getElementById('liveTime').textContent = timeStr + ' (LK Time)';
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // Fetch Orders and Riders
+        async function fetchOrdersData(showToast = false) {
+            const refreshBtn = document.getElementById('refreshBtn');
+            refreshBtn.classList.add('loading');
+            refreshBtn.querySelector('i').classList.add('fa-spin');
+
+            try {
+                const response = await fetch('/shop/admin/api/orders/');
+                if (response.status === 403) {
+                    window.location.href = '/shop/admin/login/';
+                    return;
+                }
+                const data = await response.json();
+
+                allSystemOrders = data.system_location_orders || [];
+                allCustomOrders = data.custom_location_orders || [];
+                allRiders = data.riders || [];
+
+                // Update Stats
+                document.getElementById('kpiTotalOrders').textContent = data.stats.total_orders;
+                document.getElementById('kpiSystemOrders').textContent = data.stats.system_orders_count;
+                document.getElementById('kpiCustomOrders').textContent = data.stats.custom_orders_count;
+                document.getElementById('kpiUnassigned').textContent = data.stats.unassigned_count;
+                document.getElementById('kpiDateStr').textContent = data.stats.today_str;
+
+                document.getElementById('badgeAll').textContent = data.stats.total_orders;
+                document.getElementById('badgeUnassigned').textContent = data.stats.unassigned_count;
+                document.getElementById('badgeSystem').textContent = data.stats.system_orders_count;
+                document.getElementById('badgeCustom').textContent = data.stats.custom_orders_count;
+
+                document.getElementById('group1CountBadge').textContent = `${data.stats.system_orders_count} Orders`;
+                document.getElementById('group2CountBadge').textContent = `${data.stats.custom_orders_count} Orders`;
+                document.getElementById('ridersCountBadge').textContent = `${allRiders.length} registered`;
+
+                renderRidersPanel();
+                renderFloatingRiderDropdown();
+                renderOrders();
+
+                if (showToast) {
+                    showToastNotification('Dashboard updated successfully!', 'success');
+                }
+            } catch (err) {
+                console.error('Error fetching data:', err);
+                showToastNotification('Failed to fetch dashboard data', 'error');
+            } finally {
+                refreshBtn.classList.remove('loading');
+                refreshBtn.querySelector('i').classList.remove('fa-spin');
+            }
+        }
+
+        // Render Riders
+        function renderRidersPanel() {
+            const container = document.getElementById('ridersListContainer');
+            if (!allRiders.length) {
+                container.innerHTML = '<div style="color: var(--text-muted); font-size: 13px;">No active riders registered on the platform.</div>';
+                return;
+            }
+
+            container.innerHTML = allRiders.map(r => {
+                const isSelected = selectedRiderFilter === r.id;
+                return `
+                    <div class="rider-card ${isSelected ? 'selected' : ''}" onclick="toggleRiderFilter(${r.id})">
+                        <div class="rider-info">
+                            <div class="rider-avatar">${r.name.charAt(0).toUpperCase()}</div>
+                            <div>
+                                <div class="rider-name">${escapeHtml(r.name)}</div>
+                                <a href="tel:${r.phone_number}" class="rider-phone" onclick="event.stopPropagation()">
+                                    <i class="fa-solid fa-phone"></i> ${escapeHtml(r.phone_number)}
+                                </a>
+                            </div>
+                        </div>
+                        <div class="rider-badge">
+                            <i class="fa-solid fa-box"></i> ${r.assigned_today_count} assigned
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderFloatingRiderDropdown() {
+            const select = document.getElementById('floatingRiderSelect');
+            select.innerHTML = '<option value="">-- Choose Rider to Assign --</option>' +
+                allRiders.map(r => `<option value="${r.id}">${escapeHtml(r.name)} (${r.phone_number}) — [${r.assigned_today_count} orders today]</option>`).join('');
+        }
+
+        function toggleRiderFilter(riderId) {
+            if (selectedRiderFilter === riderId) {
+                selectedRiderFilter = null;
+            } else {
+                selectedRiderFilter = riderId;
+            }
+            renderRidersPanel();
+            renderOrders();
+        }
+
+        // Filtering & Rendering Orders
+        function renderOrders() {
+            const systemGrid = document.getElementById('systemOrdersGrid');
+            const customGrid = document.getElementById('customOrdersGrid');
+
+            const filteredSystem = filterOrderList(allSystemOrders);
+            const filteredCustom = filterOrderList(allCustomOrders);
+
+            // Hide/Show section depending on filter
+            const systemSection = document.getElementById('groupSystemSection');
+            const customSection = document.getElementById('groupCustomSection');
+
+            if (currentFilter === 'custom') {
+                systemSection.style.display = 'none';
+            } else {
+                systemSection.style.display = 'block';
+            }
+
+            if (currentFilter === 'system') {
+                customSection.style.display = 'none';
+            } else {
+                customSection.style.display = 'block';
+            }
+
+            // Render System Orders
+            if (filteredSystem.length === 0) {
+                systemGrid.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fa-solid fa-inbox"></i>
+                        <p>No orders matching current filter in System Locations</p>
+                    </div>`;
+            } else {
+                systemGrid.innerHTML = filteredSystem.map(o => createOrderCardHtml(o, true)).join('');
+            }
+
+            // Render Custom Orders
+            if (filteredCustom.length === 0) {
+                customGrid.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fa-solid fa-inbox"></i>
+                        <p>No orders matching current filter in Custom Locations</p>
+                    </div>`;
+            } else {
+                customGrid.innerHTML = filteredCustom.map(o => createOrderCardHtml(o, false)).join('');
+            }
+
+            updateFloatingBar();
+        }
+
+        function filterOrderList(list) {
+            return list.filter(o => {
+                // Tab filter
+                if (currentFilter === 'unassigned' && o.rider) return false;
+                
+                // Rider filter
+                if (selectedRiderFilter && (!o.rider || o.rider.id !== selectedRiderFilter)) return false;
+
+                // Search query
+                if (searchQuery) {
+                    const q = searchQuery.toLowerCase();
+                    const orderIdMatch = o.id.toString().includes(q);
+                    const customerMatch = (o.customer.name && o.customer.name.toLowerCase().includes(q)) || (o.customer.phone && o.customer.phone.includes(q));
+                    const vendorMatch = o.vendor && o.vendor.name && o.vendor.name.toLowerCase().includes(q);
+                    const locationMatch = o.location && (
+                        (o.location.name && o.location.name.toLowerCase().includes(q)) ||
+                        (o.location.landmark && o.location.landmark.toLowerCase().includes(q)) ||
+                        (o.location.description && o.location.description.toLowerCase().includes(q))
+                    );
+                    return orderIdMatch || customerMatch || vendorMatch || locationMatch;
+                }
+
+                return true;
+            });
+        }
+
+        function createOrderCardHtml(order, isSystem) {
+            const isChecked = selectedOrderIds.has(order.id);
+            const statusClass = `status-${order.status}`;
+            
+            const itemsHtml = order.items && order.items.length ? order.items.map(it => `
+                <div class="item-line">
+                    <span>${it.quantity}x ${escapeHtml(it.product_name)}</span>
+                    <span>Rs. ${it.price}</span>
+                </div>
+            `).join('') : '<div class="item-line"><span>No item details</span></div>';
+
+            const riderPill = order.rider ? `
+                <div class="rider-assigned-pill">
+                    <i class="fa-solid fa-motorcycle"></i>
+                    <span>${escapeHtml(order.rider.name)}</span>
+                </div>
+            ` : `
+                <div class="rider-unassigned-pill">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <span>Unassigned</span>
+                </div>
+            `;
+
+            const quickOptions = allRiders.map(r => `
+                <option value="${r.id}" ${order.rider && order.rider.id === r.id ? 'selected' : ''}>
+                    ${escapeHtml(r.name)} (${r.phone_number})
+                </option>
+            `).join('');
+
+            return `
+                <div class="order-card ${isChecked ? 'selected' : ''}" id="card-order-${order.id}">
+                    <div class="card-top">
+                        <div class="checkbox-wrap">
+                            <input type="checkbox" class="order-checkbox" ${isChecked ? 'checked' : ''} onchange="toggleSelectOrder(${order.id}, this)">
+                            <div>
+                                <span class="order-id">#${order.id}</span>
+                                <span class="order-time">${order.created_at}</span>
+                            </div>
+                        </div>
+                        <span class="status-pill ${statusClass}">${order.status_display || order.status}</span>
+                    </div>
+
+                    <div class="vendor-badge">
+                        <i class="fa-solid fa-store"></i>
+                        <span>${escapeHtml(order.vendor ? order.vendor.name : 'Unknown Shop')}</span>
+                        ${order.vendor && order.vendor.district ? `<span style="opacity: 0.6;">• ${escapeHtml(order.vendor.district)}</span>` : ''}
+                    </div>
+
+                    <div class="card-details">
+                        <div class="detail-row">
+                            <i class="fa-solid fa-user"></i>
+                            <span>${escapeHtml(order.customer.name)}</span>
+                        </div>
+                        <div class="detail-row">
+                            <i class="fa-solid fa-phone"></i>
+                            <a href="tel:${order.customer.phone}" class="customer-phone-link">
+                                ${escapeHtml(order.customer.phone)}
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="location-highlight">
+                        <div class="location-name">
+                            <i class="fa-solid ${isSystem ? 'fa-building-columns' : 'fa-location-dot'}"></i>
+                            <span>${escapeHtml(order.location.name || 'Drop-off')}</span>
+                        </div>
+                        ${order.location.landmark ? `<div class="location-landmark"><i class="fa-solid fa-tag"></i> Landmark: ${escapeHtml(order.location.landmark)}</div>` : ''}
+                        ${order.location.description ? `<div class="location-desc">${escapeHtml(order.location.description)}</div>` : ''}
+                    </div>
+
+                    <div class="items-preview">
+                        ${itemsHtml}
+                    </div>
+
+                    <div class="card-pricing">
+                        <div>
+                            <span class="amount-total">Rs. ${order.total_amount}</span>
+                            <span class="fee-tag">(Fee: Rs. ${order.delivery_fee})</span>
+                        </div>
+                        ${order.delivery_code ? `<span style="font-size: 11px; color: var(--text-muted); font-family: monospace;">Code: ${order.delivery_code.substring(0, 8)}...</span>` : ''}
+                    </div>
+
+                    <div class="card-assignment">
+                        ${riderPill}
+                        <select class="quick-rider-select" onchange="quickAssignSingleOrder(${order.id}, this.value)">
+                            <option value="">Assign Rider...</option>
+                            ${order.rider ? '<option value="__unassign__">❌ Unassign</option>' : ''}
+                            ${quickOptions}
+                        </select>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Selection Management
+        function toggleSelectOrder(orderId, checkbox) {
+            if (checkbox.checked) {
+                selectedOrderIds.add(orderId);
+            } else {
+                selectedOrderIds.delete(orderId);
+            }
+            const card = document.getElementById(`card-order-${orderId}`);
+            if (card) {
+                if (checkbox.checked) card.classList.add('selected');
+                else card.classList.remove('selected');
+            }
+            updateFloatingBar();
+        }
+
+        function toggleSelectGroup(groupType) {
+            const list = groupType === 'system' ? allSystemOrders : allCustomOrders;
+            const allSelected = list.every(o => selectedOrderIds.has(o.id));
+
+            if (allSelected) {
+                list.forEach(o => selectedOrderIds.delete(o.id));
+            } else {
+                list.forEach(o => selectedOrderIds.add(o.id));
+            }
+
+            renderOrders();
+        }
+
+        function clearSelection() {
+            selectedOrderIds.clear();
+            renderOrders();
+        }
+
+        function updateFloatingBar() {
+            const bar = document.getElementById('floatingAssignBar');
+            const countBadge = document.getElementById('selectedCountBadge');
+            const countText = document.getElementById('selectedCountText');
+
+            const count = selectedOrderIds.size;
+            if (count > 0) {
+                countBadge.textContent = count;
+                countText.textContent = count === 1 ? '1 Order Selected' : `${count} Orders Selected`;
+                bar.classList.add('visible');
+            } else {
+                bar.classList.remove('visible');
+            }
+        }
+
+        // Batch Assignment Action
+        async function assignSelectedOrders() {
+            const riderId = document.getElementById('floatingRiderSelect').value;
+            if (!riderId) {
+                showToastNotification('Please select a rider from the dropdown first', 'error');
+                return;
+            }
+
+            if (selectedOrderIds.size === 0) {
+                showToastNotification('Please select at least one order to assign', 'error');
+                return;
+            }
+
+            const orderIds = Array.from(selectedOrderIds);
+
+            try {
+                const response = await fetch('/shop/admin/api/assign/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken
+                    },
+                    body: JSON.stringify({
+                        rider_id: parseInt(riderId),
+                        order_ids: orderIds
+                    })
+                });
+
+                const resData = await response.json();
+                if (response.ok && resData.success) {
+                    showToastNotification(resData.message, 'success');
+                    selectedOrderIds.clear();
+                    fetchOrdersData(false);
+                } else {
+                    showToastNotification(resData.error || 'Failed to assign orders', 'error');
+                }
+            } catch (err) {
+                console.error(err);
+                showToastNotification('Network error while assigning orders', 'error');
+            }
+        }
+
+        // Quick 1-click Assignment from order card
+        async function quickAssignSingleOrder(orderId, riderIdValue) {
+            if (!riderIdValue) return;
+
+            if (riderIdValue === '__unassign__') {
+                try {
+                    const response = await fetch('/shop/admin/api/unassign/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrftoken
+                        },
+                        body: JSON.stringify({ order_ids: [orderId] })
+                    });
+                    const resData = await response.json();
+                    if (response.ok && resData.success) {
+                        showToastNotification(`Order #${orderId} unassigned`, 'success');
+                        fetchOrdersData(false);
+                    }
+                } catch (e) {
+                    showToastNotification('Failed to unassign', 'error');
+                }
+                return;
+            }
+
+            try {
+                const response = await fetch('/shop/admin/api/assign/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken
+                    },
+                    body: JSON.stringify({
+                        rider_id: parseInt(riderIdValue),
+                        order_ids: [orderId]
+                    })
+                });
+
+                const resData = await response.json();
+                if (response.ok && resData.success) {
+                    showToastNotification(`Order #${orderId} assigned to ${resData.rider.name}`, 'success');
+                    fetchOrdersData(false);
+                } else {
+                    showToastNotification(resData.error || 'Failed to assign', 'error');
+                }
+            } catch (err) {
+                showToastNotification('Network error', 'error');
+            }
+        }
+
+        // Tab Switching
+        function setFilter(filterType, element) {
+            currentFilter = filterType;
+            document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+            if (element) element.classList.add('active');
+            renderOrders();
+        }
+
+        // Live Search
+        function handleSearch() {
+            searchQuery = document.getElementById('searchInput').value.trim();
+            renderOrders();
+        }
+
+        // Toast Helper
+        function showToastNotification(message, type = 'success') {
+            const toast = document.getElementById('toastNotification');
+            const icon = document.getElementById('toastIcon');
+            const msg = document.getElementById('toastMessage');
+
+            toast.className = `toast-notification ${type}`;
+            icon.className = type === 'success' ? 'fa-solid fa-circle-check' : 'fa-solid fa-triangle-exclamation';
+            msg.textContent = message;
+
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3500);
+        }
+
+        // Escape helper
+        function escapeHtml(text) {
+            if (!text) return '';
+            return String(text)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // Auto-refresh every 30 seconds
+        setInterval(() => {
+            fetchOrdersData(false);
+        }, 30000);
+
+        // Initial Load
+        fetchOrdersData();
+    </script>
+</body>
+</html>
