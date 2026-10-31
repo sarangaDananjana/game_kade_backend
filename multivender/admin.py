@@ -37,7 +37,9 @@ class OrderLocationAdmin(admin.ModelAdmin):
 
 @admin.register(DeliveryDistanceTier)
 class DeliveryDistanceTierAdmin(admin.ModelAdmin):
-    list_display = ('grid_distance', 'delivery_fee')
+    list_display = ('grid_distance', 'delivery_fee', 'minimum_delivery_charge_per_parcel')
+    list_editable = ('delivery_fee', 'minimum_delivery_charge_per_parcel')
+    ordering = ('grid_distance',)
     search_fields = ('grid_distance',)
 
 admin.site.register(DeliveryZone)

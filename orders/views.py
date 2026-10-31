@@ -5,7 +5,10 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.views.generic import TemplateView
 from django.conf import settings
+from django.db import transaction
+from django.http import Http404
 from .models import OrderLocation, Order, OrderItem, DeliveryZone
+from multivender.services.delivery_codes import delivery_code_matches
 
 import pytz
 from django.utils import timezone
@@ -181,19 +184,21 @@ class IsRiderPermission(IsAuthenticated):
 
 class RiderOrderViewSet(viewsets.ModelViewSet):
     serializer_class = RiderOrderSerializer
+    order_model = Order
     permission_classes = [IsRiderPermission]  # Only riders can access this
 
     def get_queryset(self):
         # For list action: exclude delivered/cancelled so the screen isn't cluttered
         # For update actions: include all non-cancelled orders so status transitions work
         if self.action in ['update', 'partial_update']:
-            return Order.objects.filter(
+            return self.order_model.objects.filter(
                 rider=self.request.user
-            ).exclude(status='cancelled').order_by('created_at')
-        return Order.objects.filter(
+            ).exclude(status='cancelled').select_for_update(of=('self',)).order_by('created_at')
+        return self.order_model.objects.filter(
             rider=self.request.user
         ).exclude(status__in=['delivered', 'cancelled']).order_by('created_at')
 
+    @transaction.atomic
     def update(self, request, *args, **kwargs):
         """
         Allow riders to update the status of their assigned orders 
@@ -201,7 +206,7 @@ class RiderOrderViewSet(viewsets.ModelViewSet):
         """
         try:
             order = self.get_object()
-        except Exception:
+        except Http404:
             return Response(
                 {'error': 'Order not found or not assigned to you.'},
                 status=status.HTTP_404_NOT_FOUND
@@ -227,11 +232,11 @@ class RiderOrderViewSet(viewsets.ModelViewSet):
         # Require delivery_code to mark as delivered
         if new_status == 'delivered':
             provided_code = request.data.get('delivery_code')
-            if not provided_code or str(order.delivery_code) != str(provided_code).strip():
+            if not delivery_code_matches(order, provided_code):
                 return Response({'error': 'Invalid delivery code.'}, status=status.HTTP_400_BAD_REQUEST)
 
         order.status = new_status
-        order.save()
+        order.save(update_fields=['status'])
 
         return Response(self.get_serializer(order).data)
 
@@ -394,6 +399,10 @@ class RiderOrdersWithRankAPIView(APIView):
     - Orders are sorted: ranked orders first (by rank asc), then unranked.
     """
     permission_classes = [IsRiderPermission]
+    order_model = Order
+    serializer_class = RiderOrderSerializer
+    route_collection = 'route_states'
+    select_related_fields = ('user', 'location')
 
     def get(self, request, *args, **kwargs):
         colombo_tz = pytz.timezone('Asia/Colombo')
@@ -403,10 +412,10 @@ class RiderOrdersWithRankAPIView(APIView):
         today_str = now.strftime('%Y-%m-%d')
 
         # 1. Fetch today's active orders from PostgreSQL
-        orders = Order.objects.filter(
+        orders = self.order_model.objects.filter(
             rider=request.user,
             created_at__range=(today_start, today_end)
-        ).exclude(status__in=['delivered', 'cancelled']).order_by('created_at')
+        ).exclude(status__in=['delivered', 'cancelled']).select_related(*self.select_related_fields).prefetch_related('items__product').order_by('created_at')
 
         # 2. Try to load today's rank map from MongoDB
         rank_map = {}  # { order_id (int): rank (int) }
@@ -416,7 +425,7 @@ class RiderOrdersWithRankAPIView(APIView):
                 from pymongo import MongoClient
                 client = MongoClient(mongo_uri)
                 db = client['Game_Kade']
-                collection = db['route_states']
+                collection = db[self.route_collection]
                 saved_doc = collection.find_one(
                     {'rider_id': request.user.id, 'date': today_str},
                     {'_id': 0}
@@ -429,7 +438,7 @@ class RiderOrdersWithRankAPIView(APIView):
                 pass
 
         # 3. Serialize orders and inject rank
-        serializer = RiderOrderSerializer(orders, many=True)
+        serializer = self.serializer_class(orders, many=True)
         result = []
         for order_data in serializer.data:
             order_id = order_data['id']
@@ -445,6 +454,8 @@ class RiderOrdersWithRankAPIView(APIView):
 
 class OptimizeRouteAPIView(APIView):
     permission_classes = [IsRiderPermission]
+    order_model = Order
+    route_collection = 'route_states'
 
     def post(self, request, *args, **kwargs):
         # 1. Get rider's current lat/lng from request body
@@ -462,7 +473,7 @@ class OptimizeRouteAPIView(APIView):
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         today_end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
 
-        orders = Order.objects.filter(
+        orders = self.order_model.objects.filter(
             rider=request.user,
             created_at__range=(today_start, today_end)
         ).exclude(status__in=['delivered', 'cancelled'])
@@ -540,7 +551,7 @@ class OptimizeRouteAPIView(APIView):
             from pymongo import MongoClient
             client = MongoClient(mongo_uri)
             db = client['Game_Kade']
-            collection = db['route_states']
+            collection = db[self.route_collection]
 
             document = {
                 'rider_id': request.user.id,
@@ -567,6 +578,7 @@ class OptimizeRouteAPIView(APIView):
 
 class GetOptimizedRouteAPIView(APIView):
     permission_classes = [IsRiderPermission]
+    route_collection = 'route_states'
 
     def get(self, request, *args, **kwargs):
         colombo_tz = pytz.timezone('Asia/Colombo')
@@ -581,7 +593,7 @@ class GetOptimizedRouteAPIView(APIView):
             from pymongo import MongoClient
             client = MongoClient(mongo_uri)
             db = client['Game_Kade']
-            collection = db['route_states']
+            collection = db[self.route_collection]
 
             # Find document for THIS rider and TODAY
             saved_doc = collection.find_one(

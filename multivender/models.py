@@ -1,8 +1,14 @@
 import uuid
 import h3
 from django.conf import settings  # Import settings to access the User model safely
+from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
+from decimal import Decimal
+from django.db import IntegrityError, router, transaction
 from django.contrib.gis.db import models
 from django.contrib.gis.geos import Point
+from django.utils import timezone
+from .services.delivery_codes import generate_delivery_code
 
 DISTRICT_CHOICES = [
     ('Matara', 'Matara'),
@@ -28,7 +34,18 @@ class DeliveryDistanceTier(models.Model):
         unique=True, 
         help_text="H3 grid distance (0 for same tile, 1 for adjacent, etc.)"
     )
-    delivery_fee = models.DecimalField(max_digits=10, decimal_places=2)
+    delivery_fee = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.00'))])
+    minimum_delivery_charge_per_parcel = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal('0.00'))],
+        help_text='Minimum delivery charge for each individual meal delivered to this tier. Set this before enabling delivery quotes.',
+    )
+
+    def clean(self):
+        super().clean()
+        if (self.minimum_delivery_charge_per_parcel is not None and self.delivery_fee is not None
+                and self.minimum_delivery_charge_per_parcel > self.delivery_fee):
+            raise ValidationError({'minimum_delivery_charge_per_parcel': 'The minimum cannot exceed this tier\'s delivery fee.'})
     
     def __str__(self):
         return f"Distance {self.grid_distance} (R{self.grid_distance + 1}) - Rs {self.delivery_fee}"
@@ -166,9 +183,38 @@ class Order(models.Model):
         max_length=20, choices=STATUS_CHOICES, default='pending')
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
     delivery_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    delivery_code = models.UUIDField(
+    legacy_delivery_code = models.UUIDField(
         default=uuid.uuid4, editable=False, unique=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    delivery_code = models.CharField(max_length=10, editable=False, unique=True)
+    created_at = models.DateTimeField(default=timezone.now, editable=False)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(delivery_code__regex=r'^[0-9]{10}$'),
+                name='multivendor_delivery_code_ten_digits',
+            ),
+        ]
+
+    @property
+    def delivery_pin(self):
+        return self.delivery_code[-4:]
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding or self.delivery_code:
+            return super().save(*args, **kwargs)
+        using = kwargs.get('using') or router.db_for_write(type(self), instance=self)
+        for _ in range(32):
+            self.delivery_code = generate_delivery_code(created_at=self.created_at, using=using)
+            try:
+                # A savepoint lets us retry a concurrent code collision even inside checkout.
+                with transaction.atomic(using=using):
+                    return super().save(*args, **kwargs)
+            except IntegrityError:
+                if not type(self).objects.using(using).filter(delivery_code=self.delivery_code).exists():
+                    raise
+        self.delivery_code = ''
+        raise ValidationError('Could not allocate a delivery code. Please try placing the order again.')
 
     def __str__(self):
         return f"Order {self.id} - {self.vendor.shop_name} - {self.status}"
