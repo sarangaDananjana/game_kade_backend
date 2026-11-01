@@ -8,6 +8,7 @@ from django.conf import settings
 from django.db import transaction
 from django.http import Http404
 from .models import OrderLocation, Order, OrderItem, DeliveryZone
+from .service_area import DeliveryAreaError, check_delivery_area
 from multivender.services.delivery_codes import delivery_code_matches
 
 import pytz
@@ -24,6 +25,13 @@ class OrderLocationSerializer(serializers.ModelSerializer):
         exclude = ['location_point']
         # Ensure users can't override these values via the API when creating a location
         read_only_fields = ('user', 'is_system_defined')
+
+    def validate(self, attrs):
+        try:
+            check_delivery_area(attrs.get('lat', getattr(self.instance, 'lat', None)), attrs.get('lng', getattr(self.instance, 'lng', None)))
+        except DeliveryAreaError as exc:
+            raise serializers.ValidationError({'detail': str(exc), 'code': exc.code}) from exc
+        return attrs
 
 
 class OrderLocationViewSet(viewsets.ModelViewSet):
@@ -99,6 +107,15 @@ class OrderSerializer(serializers.ModelSerializer):
         # Read-only so users can't override these on creation
         read_only_fields = ['id', 'status', 'delivery_code', 'created_at']
 
+    def validate_location(self, location):
+        if location is None:
+            raise serializers.ValidationError('Choose a delivery address.')
+        try:
+            check_delivery_area(location.lat, location.lng)
+        except DeliveryAreaError as exc:
+            raise serializers.ValidationError(str(exc), code=exc.code) from exc
+        return location
+
     def to_representation(self, instance):
         """
         NEW: Override how the order is represented as JSON.
@@ -118,14 +135,19 @@ class OrderSerializer(serializers.ModelSerializer):
 
         # --- NEW LOGIC: FIND THE ZONE ---
         location = validated_data.get('location')
-        assigned_zone = None
+        if location is None:
+            raise serializers.ValidationError({'location': 'Choose a delivery address.'})
+        try:
+            assigned_zone = check_delivery_area(location.lat, location.lng)
+        except DeliveryAreaError as exc:
+            raise serializers.ValidationError({'location': str(exc)}) from exc
 
         # Check which DeliveryZone polygon contains the order's Point
         if location and location.location_point:
             assigned_zone = DeliveryZone.objects.filter(
                 polygon__contains=location.location_point,
                 is_active=True
-            ).first()
+            ).first() or assigned_zone
 
         # Create the main order WITH the assigned zone
         order = Order.objects.create(
@@ -249,7 +271,7 @@ class DeliveryZoneSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = DeliveryZone
-        fields = ['id', 'name', 'is_active', 'is_primary', 'coordinates']
+        fields = ['id', 'name', 'district', 'is_active', 'is_primary', 'coordinates']
 
     def get_coordinates(self, obj):
         if obj.polygon:
@@ -268,6 +290,9 @@ class DeliveryZoneViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         data = request.data
         name = data.get('name')
+        district = data.get('district', 'Matara')
+        if district != 'Matara':
+            return Response({'district': ['Delivery is currently available only in Matara District.']}, status=status.HTTP_400_BAD_REQUEST)
         is_primary = data.get('is_primary', False)
         coords_data = data.get('coordinates', []) 
         
@@ -286,7 +311,7 @@ class DeliveryZoneViewSet(viewsets.ModelViewSet):
             if is_primary:
                 DeliveryZone.objects.filter(is_primary=True).update(is_primary=False)
                 
-            zone = DeliveryZone.objects.create(name=name, polygon=polygon, is_primary=is_primary)
+            zone = DeliveryZone.objects.create(name=name, district=district, polygon=polygon, is_primary=is_primary)
             return Response(DeliveryZoneSerializer(zone).data, status=status.HTTP_201_CREATED)
             
         return Response({'error': 'Invalid coordinates provided. Must provide at least 3 points.'}, status=status.HTTP_400_BAD_REQUEST)

@@ -5,6 +5,8 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from django.core.exceptions import ValidationError
+from django.contrib.gis.geos import Polygon
+from orders.models import DeliveryZone as MapDeliveryZone
 from django.apps import apps
 from django.db import IntegrityError, connection, transaction
 from django.db.migrations.executor import MigrationExecutor
@@ -38,6 +40,9 @@ class DeliveryCodeValidationTests(SimpleTestCase):
 class OrderFixtures(TestCase):
     @classmethod
     def setUpTestData(cls):
+        # Synthetic service boundary for the existing order and pricing API fixtures.
+        MapDeliveryZone.objects.create(name='Test Matara service area', district='Matara', is_primary=True,
+            polygon=Polygon(((80.3, 5.7), (80.9, 5.7), (80.9, 6.3), (80.3, 6.3), (80.3, 5.7)), srid=4326))
         cls.customer = CustomUser.objects.create_user('0771000001', name='Customer')
         cls.owner = CustomUser.objects.create_user('0771000002', role='owner')
         cls.rider = CustomUser.objects.create_user('0771000003', role='rider')

@@ -3,6 +3,7 @@
 from decimal import Decimal, ROUND_CEILING, ROUND_HALF_UP
 
 import h3
+from orders.service_area import DeliveryAreaError, check_delivery_area
 
 from multivender.models import DeliveryDistanceTier
 
@@ -34,6 +35,11 @@ def delivery_grid_distance(vendor, order_location=None, coordinates=None):
         return None
     if order_location is None and coordinates is None:
         raise DeliveryPricingError('Choose a delivery address to calculate delivery.', 'location_required')
+    lat, lng = (order_location.lat, order_location.lng) if order_location else coordinates
+    try:
+        check_delivery_area(lat, lng)
+    except DeliveryAreaError as exc:
+        raise DeliveryPricingError(str(exc), exc.code) from exc
     try:
         vendor_cell = vendor.h3_index or h3.latlng_to_cell(vendor.lat, vendor.lng, 8)
         location_cell = (order_location.h3_index or h3.latlng_to_cell(order_location.lat, order_location.lng, 8)) if order_location else h3.latlng_to_cell(*coordinates, 8)

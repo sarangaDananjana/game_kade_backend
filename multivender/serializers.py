@@ -4,6 +4,8 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError as ModelValidationError
 from django.db import transaction
 from decimal import Decimal
+from django.utils.functional import cached_property
+from orders.service_area import DeliveryAreaError, check_delivery_area, primary_delivery_zone
 
 User = get_user_model()
 
@@ -56,10 +58,40 @@ class OrderItemSerializer(serializers.ModelSerializer):
         read_only_fields = ['price_at_purchase']
 
 class OrderLocationSerializer(serializers.ModelSerializer):
+    delivery_available = serializers.SerializerMethodField()
+    delivery_message = serializers.SerializerMethodField()
+
     class Meta:
         model = OrderLocation
-        fields = ['id', 'name', 'district', 'lat', 'lng', 'description', 'unique_identity', 'is_system_defined', 'user']
+        fields = ['id', 'name', 'district', 'lat', 'lng', 'description', 'unique_identity', 'is_system_defined', 'user', 'delivery_available', 'delivery_message']
         read_only_fields = ['user', 'is_system_defined']
+
+    @cached_property
+    def delivery_zone(self):
+        return primary_delivery_zone()
+
+    def delivery_error(self, obj):
+        try:
+            check_delivery_area(obj.lat, obj.lng, zone=self.delivery_zone)
+        except DeliveryAreaError as exc:
+            return str(exc)
+        return None
+
+    def get_delivery_available(self, obj):
+        return self.delivery_error(obj) is None
+
+    def get_delivery_message(self, obj):
+        return self.delivery_error(obj)
+
+    def validate(self, attrs):
+        lat = attrs.get('lat', getattr(self.instance, 'lat', None))
+        lng = attrs.get('lng', getattr(self.instance, 'lng', None))
+        try:
+            zone = check_delivery_area(lat, lng, zone=self.delivery_zone)
+        except DeliveryAreaError as exc:
+            raise serializers.ValidationError({'detail': str(exc), 'code': exc.code}) from exc
+        attrs['district'] = zone.district
+        return attrs
 
 class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True)

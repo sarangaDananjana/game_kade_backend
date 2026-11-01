@@ -39,6 +39,7 @@
                 <div class="card-body">
                     <h5 class="card-title">Draw New Zone</h5>
                     <p class="text-muted small">Use the polygon tool on the map to draw a new delivery zone.</p>
+                    <p class="text-muted small">District: Matara. The active primary zone defines where customers can save addresses and receive delivery.</p>
                     
                     <form id="saveZoneForm" style="display: none;">
                         <div class="mb-3">
@@ -158,6 +159,7 @@
 
         const payload = {
             name: document.getElementById('zoneName').value,
+            district: 'Matara',
             is_primary: document.getElementById('isPrimary').checked,
             coordinates: coordinates
         };
@@ -213,6 +215,7 @@
                 card.innerHTML = `
                     <div class="card-body py-2 px-3">
                         <strong class="d-block">${zone.name}</strong>
+                        <small class="text-muted d-block">Matara District</small>
                         <small class="text-muted">
                             ${isPrimary ? '<span class="badge bg-primary">Primary</span>' : 'Standard'}
                             ${zone.is_active ? '' : '<span class="badge bg-danger">Inactive</span>'}

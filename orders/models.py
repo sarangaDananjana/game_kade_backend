@@ -9,6 +9,7 @@ User = settings.AUTH_USER_MODEL
 
 class DeliveryZone(models.Model):
     name = models.CharField(max_length=100)
+    district = models.CharField(max_length=50, choices=[('Matara', 'Matara')], default='Matara')
     polygon = models.PolygonField(
         help_text="Draw the delivery zone on the map")
     is_active = models.BooleanField(default=True)

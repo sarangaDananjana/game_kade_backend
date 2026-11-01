@@ -34,8 +34,9 @@ class OrderAdmin(admin.ModelAdmin):
 
 @admin.register(DeliveryZone)
 class DeliveryZoneAdmin(admin.GISModelAdmin):
-    list_display = ('name', 'is_active')
-    search_fields = ('name',)
+    list_display = ('name', 'district', 'is_active', 'is_primary')
+    list_filter = ('district', 'is_active', 'is_primary')
+    search_fields = ('name', 'district')
 
     gis_widget_kwargs = {
         'attrs': {
