@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Game Kade MultiVendor — Dispatch Command Dashboard</title>
+    <title>Meal Drop — Dispatch Command Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -969,7 +969,7 @@
                     <i class="fa-solid fa-store"></i>
                 </div>
                 <div class="brand-text">
-                    <h1>Game Kade <span>MultiVendor</span></h1>
+                    <h1>Meal Drop</h1>
                     <p>Order Dispatch & Logistics Command Center</p>
                 </div>
             </div>
@@ -990,7 +990,7 @@
                     <span>Refresh</span>
                 </button>
 
-                <a href="{% url 'multivendor-admin-logout' %}" class="btn-ghost" style="color: #f87171;">
+                <a href="{% url 'dispatch-logout' %}" class="btn-ghost" style="color: #f87171;">
                     <i class="fa-solid fa-arrow-right-from-bracket"></i>
                     <span>Logout</span>
                 </a>
@@ -1214,9 +1214,9 @@
             refreshBtn.querySelector('i').classList.add('fa-spin');
 
             try {
-                const response = await fetch('/shop/admin/api/orders/');
+                const response = await fetch('/dispatch/api/orders/');
                 if (response.status === 403) {
-                    window.location.href = '/shop/admin/login/';
+                    window.location.href = '/dispatch/login/';
                     return;
                 }
                 const data = await response.json();
@@ -1535,7 +1535,7 @@
             const orderIds = Array.from(selectedOrderIds);
 
             try {
-                const response = await fetch('/shop/admin/api/assign/', {
+                const response = await fetch('/dispatch/api/assign/', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1567,7 +1567,7 @@
 
             if (riderIdValue === '__unassign__') {
                 try {
-                    const response = await fetch('/shop/admin/api/unassign/', {
+                    const response = await fetch('/dispatch/api/unassign/', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -1587,7 +1587,7 @@
             }
 
             try {
-                const response = await fetch('/shop/admin/api/assign/', {
+                const response = await fetch('/dispatch/api/assign/', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

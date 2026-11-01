@@ -49,6 +49,18 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     def __str__(self):
         return f"{self.phone_number}"
 
+    @property
+    def multivendor_locations(self):
+        return self.locations
+
+    @property
+    def multivendor_orders(self):
+        return self.orders
+
+    @property
+    def multivendor_assigned_deliveries(self):
+        return self.assigned_deliveries
+
 
 class OTP(models.Model):
     user = models.ForeignKey(

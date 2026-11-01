@@ -10,7 +10,7 @@ def generate_otp_code():
 
 def send_otp_sms(phone, otp_code):
     """Sends OTP using the provided text.lk API"""
-    message = f"Your Food Delivery App OTP code is: {otp_code}. It will expire in 5 minutes."
+    message = f"Your Meal Drop OTP code is: {otp_code}. It will expire in 5 minutes."
     api_key = os.environ.get("TEXT_LK_API_KEY")
 
     try:

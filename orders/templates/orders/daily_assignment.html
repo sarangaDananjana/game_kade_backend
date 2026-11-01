@@ -151,6 +151,9 @@
 <!-- Hidden print container -->
 <div id="printArea"></div>
 
+{{ vendors|json_script:"meal-drop-vendors" }}
+{{ map_center|json_script:"meal-drop-map-center" }}
+
 <script>
     let map;
     let drawingManager;
@@ -160,23 +163,24 @@
 
     // Initialize Map
     function initMap() {
-        // Center of Sri Lanka or default Shop location
-        const shopLocation = { lat: 5.938075, lng: 80.581056 };
+        const mapCenter = JSON.parse(document.getElementById('meal-drop-map-center').textContent);
         
         map = new google.maps.Map(document.getElementById("map"), {
-            center: shopLocation,
+            center: mapCenter,
             zoom: 14,
         });
 
-        // Add shop marker
-        new google.maps.Marker({
-            position: shopLocation,
-            map: map,
-            title: "ගමේ කඩේ (Shop)",
-            icon: {
-                url: "https://maps.google.com/mapfiles/ms/icons/store-locator.png",
-                scaledSize: new google.maps.Size(32, 32)
-            }
+        const vendors = JSON.parse(document.getElementById('meal-drop-vendors').textContent);
+        vendors.forEach(vendor => {
+            new google.maps.Marker({
+                position: { lat: vendor.lat, lng: vendor.lng },
+                map: map,
+                title: vendor.shop_name,
+                icon: {
+                    url: "https://maps.google.com/mapfiles/ms/icons/store-locator.png",
+                    scaledSize: new google.maps.Size(32, 32)
+                }
+            });
         });
 
         drawingManager = new google.maps.drawing.DrawingManager({
@@ -287,6 +291,7 @@
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}',
                 },
                 body: JSON.stringify({
                     rider_id: riderId,
@@ -328,12 +333,14 @@
             let totalItems = 0;
             data.forEach(item => {
                 totalItems += item.total_quantity;
-                tbody.innerHTML += `
-                    <tr>
-                        <td>${item.product_name}</td>
-                        <td class="fw-bold">${item.total_quantity}</td>
-                    </tr>
-                `;
+                const row = document.createElement('tr');
+                const name = document.createElement('td');
+                name.textContent = `${item.vendor_name} · ${item.product_name}`;
+                const quantity = document.createElement('td');
+                quantity.className = 'fw-bold';
+                quantity.textContent = item.total_quantity;
+                row.append(name, quantity);
+                tbody.appendChild(row);
             });
             
             // Add a total row

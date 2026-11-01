@@ -28,4 +28,8 @@ Keep the existing primary polygon active. No new polygon needs to be drawn. The 
 
 65 backend tests pass with an isolated SpatiaLite database and real GIS libraries, including unchanged polygon migration, inside and outside addresses, partial edits, saved-address flags, quotes, checkout, boundary points, polygon holes, missing coverage, pickup, and the existing pricing and order-code tests. `makemigrations --check --dry-run` detects no pending changes. The Android debug app and instrumentation APK compile; all 23 unit tests and two native UI checks pass. The warning was visually checked on a phone, in dark theme with larger text, and on a compact phone with larger text.
 
-Production deployment and live verification are pending the user's sync. After syncing, run `C:/Users/Saranga/Documents/MealDrop/.design/verify_live_service_area.py` with Python. It checks the Matara metadata, compares the polygon to the captured pre-sync boundary, requests one inside quote and one outside quote, and writes `service-area-live-verification.json`. These quote requests create no orders or addresses.
+The user confirmed the server sync, and live verification at `https://mealdrop.shop` passed. The active primary zone reports `district: Matara`; all 91 polygon coordinates match the pre-sync boundary. An inside coordinate quote returned HTTP 200. A point just beyond the northern boundary returned HTTP 422, `code: out_of_delivery_area`, and the Matara warning above. No orders or addresses were created during these checks.
+
+The public saved-location endpoint also returned HTTP 200, with `delivery_available` and `delivery_message` present on all six system locations. The response summary is recorded in `.design/service-area-location-flags-verification.json`.
+
+The repeatable verification script is `C:/Users/Saranga/Documents/MealDrop/.design/verify_live_service_area.py`. It writes the actual API responses to `.design/service-area-live-verification.json`.

@@ -72,6 +72,9 @@
     </div>
 </div>
 
+{{ vendors|json_script:"meal-drop-vendors" }}
+{{ map_center|json_script:"meal-drop-map-center" }}
+
 <script>
     let map;
     let drawingManager;
@@ -80,23 +83,24 @@
 
     // Initialize Map
     function initMap() {
-        const shopLocation = { lat: 5.938075, lng: 80.581056 };
+        const mapCenter = JSON.parse(document.getElementById('meal-drop-map-center').textContent);
         
         map = new google.maps.Map(document.getElementById("map"), {
-            center: shopLocation,
+            center: mapCenter,
             zoom: 14,
         });
 
-        // Add a pretty shop marker
-        new google.maps.Marker({
-            position: shopLocation,
-            map: map,
-            title: "ගමේ කඩේ (Shop)",
-            icon: {
-                url: "https://maps.google.com/mapfiles/ms/icons/store-locator.png", // Or any custom URL
-                scaledSize: new google.maps.Size(32, 32)
-            },
-            animation: google.maps.Animation.DROP
+        const vendors = JSON.parse(document.getElementById('meal-drop-vendors').textContent);
+        vendors.forEach(vendor => {
+            new google.maps.Marker({
+                position: { lat: vendor.lat, lng: vendor.lng },
+                map: map,
+                title: vendor.shop_name,
+                icon: {
+                    url: "https://maps.google.com/mapfiles/ms/icons/store-locator.png",
+                    scaledSize: new google.maps.Size(32, 32)
+                }
+            });
         });
 
         drawingManager = new google.maps.drawing.DrawingManager({
@@ -169,7 +173,7 @@
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    // Assuming no CSRF needed for simple API without session auth for now
+                    'X-CSRFToken': '{{ csrf_token }}',
                 },
                 body: JSON.stringify(payload)
             });

@@ -1,15 +1,29 @@
-from rest_framework import viewsets, serializers, status
+from rest_framework import generics, viewsets, status
 from django.contrib.gis.db import models
-from django.contrib.gis.geos import Polygon
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
 from django.views.generic import TemplateView
 from django.conf import settings
 from django.db import transaction
 from django.http import Http404
 from .models import OrderLocation, Order, OrderItem, DeliveryZone
 from .service_area import DeliveryAreaError, check_delivery_area
-from multivender.services.delivery_codes import delivery_code_matches
+from .services.delivery_codes import delivery_code_matches
+from .serializers import (
+    DeliveryZoneCreateSerializer, DeliveryZoneSerializer, OrderLocationSerializer,
+    OrderSerializer, RiderOrderSerializer,
+)
+from rest_framework.exceptions import ValidationError
+from zoneinfo import ZoneInfo
+from django.contrib.auth.mixins import UserPassesTestMixin
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import ensure_csrf_cookie
+from rest_framework.authentication import SessionAuthentication
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from vendors.models import Vendor
+from vendors.permissions import CanManageDeliveryZones, IsPlatformAdmin, is_platform_admin
+from .service_area import primary_delivery_zone
+from .services.assignment import AssignmentError, assign_orders
 
 import pytz
 from django.utils import timezone
@@ -18,184 +32,69 @@ from django.db.models import Sum, F
 from users.models import CustomUser
 
 
-class OrderLocationSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = OrderLocation
-        # Exclude the internal PostGIS point field so it doesn't clutter the JSON response
-        exclude = ['location_point']
-        # Ensure users can't override these values via the API when creating a location
-        read_only_fields = ('user', 'is_system_defined')
-
-    def validate(self, attrs):
-        try:
-            check_delivery_area(attrs.get('lat', getattr(self.instance, 'lat', None)), attrs.get('lng', getattr(self.instance, 'lng', None)))
-        except DeliveryAreaError as exc:
-            raise serializers.ValidationError({'detail': str(exc), 'code': exc.code}) from exc
-        return attrs
-
-
 class OrderLocationViewSet(viewsets.ModelViewSet):
     serializer_class = OrderLocationSerializer
-    permission_classes = [IsAuthenticated]  # Requires valid JWT Access Token
+    permission_classes = [IsAuthenticatedOrReadOnly]
 
     def get_queryset(self):
-        """
-        GET API: Fetches system-defined locations AND the authenticated user's custom locations.
-        """
         user = self.request.user
-        return OrderLocation.objects.filter(
-            models.Q(is_system_defined=True) | models.Q(user=user)
-        )
+        if self.action in ('update', 'partial_update', 'destroy'):
+            return OrderLocation.objects.filter(user=user, is_system_defined=False)
+        if user.is_authenticated:
+            return OrderLocation.objects.filter(models.Q(is_system_defined=True) | models.Q(user=user))
+        return OrderLocation.objects.filter(is_system_defined=True)
 
     def perform_create(self, serializer):
-        """
-        POST API: When a user creates a location, it automatically assigns their user ID
-        and forces 'is_system_defined' to False.
-        """
         serializer.save(user=self.request.user, is_system_defined=False)
 
 
-class OrderItemSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = OrderItem
-        fields = ['product', 'quantity', 'price_at_purchase']
+class CheckoutHoursMixin:
+    def perform_create(self, serializer):
+        local_time = timezone.now().astimezone(ZoneInfo('Asia/Colombo'))
+        if not (12 <= local_time.hour < 17):
+            raise ValidationError('We are currently closed. Orders are only accepted between 12:00 PM and 5:00 PM.')
+        serializer.save(user=self.request.user)
 
 
-# ─── Rider-specific serializers (do NOT touch user-app serializers above) ───────
-
-class RiderOrderItemSerializer(serializers.ModelSerializer):
-    """Extends the base item serializer to include the human-readable product name."""
-    product_name = serializers.CharField(source='product.name', read_only=True)
-
-    class Meta:
-        model = OrderItem
-        fields = ['product', 'product_name', 'quantity', 'price_at_purchase']
-
-
-class RiderOrderLocationSerializer(serializers.ModelSerializer):
-    """Location serializer for riders — exposes `landmark` instead of the raw `unique_identity` field name."""
-    landmark = serializers.CharField(source='unique_identity', read_only=True)
-
-    class Meta:
-        model = OrderLocation
-        fields = ['id', 'name', 'lat', 'lng', 'description', 'landmark']
-
-
-class RiderOrderSerializer(serializers.ModelSerializer):
-    """Full order serializer for the rider app — includes item names, customer contact, and clean location data."""
-    items = RiderOrderItemSerializer(many=True, read_only=True)
-    location = RiderOrderLocationSerializer(read_only=True)
-    customer_name = serializers.CharField(source='user.name', read_only=True)
-    customer_phone = serializers.CharField(source='user.phone_number', read_only=True)
-
-    class Meta:
-        model = Order
-        fields = [
-            'id', 'status', 'total_amount', 'delivery_code', 'created_at',
-            'customer_name', 'customer_phone', 'location', 'items'
-        ]
-
-
-class OrderSerializer(serializers.ModelSerializer):
-    # Handle nested items automatically
-    items = OrderItemSerializer(many=True)
-
-    class Meta:
-        model = Order
-        fields = ['id', 'location', 'status', 'total_amount',
-                  'delivery_code', 'created_at', 'items']
-        # Read-only so users can't override these on creation
-        read_only_fields = ['id', 'status', 'delivery_code', 'created_at']
-
-    def validate_location(self, location):
-        if location is None:
-            raise serializers.ValidationError('Choose a delivery address.')
-        try:
-            check_delivery_area(location.lat, location.lng)
-        except DeliveryAreaError as exc:
-            raise serializers.ValidationError(str(exc), code=exc.code) from exc
-        return location
-
-    def to_representation(self, instance):
-        """
-        NEW: Override how the order is represented as JSON.
-        Instead of returning just "location": 1, we embed the entire OrderLocation JSON.
-        """
-        response = super().to_representation(instance)
-        # Check if a location is attached, then serialize it
-        if instance.location:
-            response['location'] = OrderLocationSerializer(
-                instance.location).data
-        return response
-
-    def create(self, validated_data):
-        # Extract the nested items data
-        items_data = validated_data.pop('items')
-        user = self.context['request'].user
-
-        # --- NEW LOGIC: FIND THE ZONE ---
-        location = validated_data.get('location')
-        if location is None:
-            raise serializers.ValidationError({'location': 'Choose a delivery address.'})
-        try:
-            assigned_zone = check_delivery_area(location.lat, location.lng)
-        except DeliveryAreaError as exc:
-            raise serializers.ValidationError({'location': str(exc)}) from exc
-
-        # Check which DeliveryZone polygon contains the order's Point
-        if location and location.location_point:
-            assigned_zone = DeliveryZone.objects.filter(
-                polygon__contains=location.location_point,
-                is_active=True
-            ).first() or assigned_zone
-
-        # Create the main order WITH the assigned zone
-        order = Order.objects.create(
-            user=user,
-            zone=assigned_zone,  # <-- Assign it here
-            **validated_data
-        )
-
-        # Create all the nested order items
-        for item_data in items_data:
-            OrderItem.objects.create(order=order, **item_data)
-
-        return order
-
-
-class OrderViewSet(viewsets.ModelViewSet):
+class OrderViewSet(CheckoutHoursMixin, viewsets.ModelViewSet):
     serializer_class = OrderSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        # Users can only view their own orders, ordered by newest first
-        return Order.objects.filter(user=self.request.user).order_by('-created_at')
+        queryset = Order.objects.filter(user=self.request.user).select_related('vendor', 'location').prefetch_related('items__product')
+        if self.action in ('update', 'partial_update'):
+            queryset = queryset.select_for_update(of=('self',))
+        return queryset.order_by('-created_at')
 
+    @transaction.atomic
     def update(self, request, *args, **kwargs):
-        """
-        PUT /api/orders/{id}/
-        We override the default update method so that this endpoint is strictly
-        used for cancelling an order by the user.
-        """
         order = self.get_object()
-
-        # Prevent cancelling orders that are already being prepared or delivered
+        if request.data.get('status') != 'cancelled':
+            return Response({'error': 'You can only cancel pending orders.'}, status=status.HTTP_400_BAD_REQUEST)
         if order.status != 'pending':
-            return Response(
-                {'error': 'Only pending orders can be cancelled.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Update status to cancelled
+            return Response({'error': 'Only pending orders can be cancelled.'}, status=status.HTTP_400_BAD_REQUEST)
         order.status = 'cancelled'
-        order.save()
-
-        # Return the updated order details
-        serializer = self.get_serializer(order)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        order.save(update_fields=['status'])
+        return Response(self.get_serializer(order).data)
 
 
-##################################################################################### Rider APP APIs ###############################################################
+class OrderCreateView(CheckoutHoursMixin, generics.CreateAPIView):
+    queryset = Order.objects.all()
+    serializer_class = OrderSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class OrderListView(generics.ListAPIView):
+    serializer_class = OrderSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Order.objects.filter(user=self.request.user).select_related('vendor', 'location').prefetch_related('items__product').order_by('-created_at')
+
+
+class OrderDetailView(OrderViewSet):
+    """Compatibility view for integrations using the former class name."""
+
 
 class IsRiderPermission(IsAuthenticated):
     """Custom permission to check if the user is a rider."""
@@ -218,7 +117,7 @@ class RiderOrderViewSet(viewsets.ModelViewSet):
             ).exclude(status='cancelled').select_for_update(of=('self',)).order_by('created_at')
         return self.order_model.objects.filter(
             rider=self.request.user
-        ).exclude(status__in=['delivered', 'cancelled']).order_by('created_at')
+        ).exclude(status__in=['delivered', 'cancelled']).select_related('user', 'vendor', 'location').prefetch_related('items__product').order_by('created_at')
 
     @transaction.atomic
     def update(self, request, *args, **kwargs):
@@ -265,71 +164,53 @@ class RiderOrderViewSet(viewsets.ModelViewSet):
 
 ##################################################################################### Delivery Zone API & Views ###############################################################
 
-class DeliveryZoneSerializer(serializers.ModelSerializer):
-    # To handle Polygon to GeoJSON and vice versa manually since we don't have rest_framework_gis
-    coordinates = serializers.SerializerMethodField()
-
-    class Meta:
-        model = DeliveryZone
-        fields = ['id', 'name', 'district', 'is_active', 'is_primary', 'coordinates']
-
-    def get_coordinates(self, obj):
-        if obj.polygon:
-            # Returns a list of coordinates. E.g. ((x,y), (x,y), (x,y))
-            # Convert to list of dicts for frontend {lat: y, lng: x}
-            coords = obj.polygon.coords[0] # assuming single outer polygon
-            return [{"lat": c[1], "lng": c[0]} for c in coords]
-        return []
-
-
 class DeliveryZoneViewSet(viewsets.ModelViewSet):
     queryset = DeliveryZone.objects.all()
     serializer_class = DeliveryZoneSerializer
-    permission_classes = [AllowAny]  # No auth for now, as requested
+    authentication_classes = [JWTAuthentication, SessionAuthentication]
+    permission_classes = [CanManageDeliveryZones]
 
+    @transaction.atomic
     def create(self, request, *args, **kwargs):
-        data = request.data
-        name = data.get('name')
-        district = data.get('district', 'Matara')
-        if district != 'Matara':
-            return Response({'district': ['Delivery is currently available only in Matara District.']}, status=status.HTTP_400_BAD_REQUEST)
-        is_primary = data.get('is_primary', False)
-        coords_data = data.get('coordinates', []) 
-        
-        if coords_data and len(coords_data) >= 3:
-            # coords_data expects: [{"lat": x, "lng": y}, ...]
-            # Polygon expects list of (lng, lat) tuples
-            poly_coords = [(c['lng'], c['lat']) for c in coords_data]
-            
-            # Close the polygon if not closed
-            if poly_coords[0] != poly_coords[-1]:
-                poly_coords.append(poly_coords[0])
-                
-            polygon = Polygon(poly_coords)
-            
-            # If this is marked as primary, un-mark existing primary zones
-            if is_primary:
-                DeliveryZone.objects.filter(is_primary=True).update(is_primary=False)
-                
-            zone = DeliveryZone.objects.create(name=name, district=district, polygon=polygon, is_primary=is_primary)
-            return Response(DeliveryZoneSerializer(zone).data, status=status.HTTP_201_CREATED)
-            
-        return Response({'error': 'Invalid coordinates provided. Must provide at least 3 points.'}, status=status.HTTP_400_BAD_REQUEST)
+        payload = DeliveryZoneCreateSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        data = payload.validated_data
+        if data['is_primary']:
+            DeliveryZone.objects.filter(is_primary=True).update(is_primary=False)
+        zone = DeliveryZone.objects.create(**data)
+        return Response(DeliveryZoneSerializer(zone).data, status=status.HTTP_201_CREATED)
 
 
-class DeliveryZoneAdminView(TemplateView):
-    template_name = 'orders/delivery_zone_map.html'
+class VendorMapContextMixin(UserPassesTestMixin):
+    login_url = '/dispatch/login/'
+
+    def test_func(self):
+        return is_platform_admin(self.request.user)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        context['vendors'] = list(Vendor.objects.filter(is_active=True).values('id', 'shop_name', 'lat', 'lng'))
+        zone = primary_delivery_zone()
+        point = zone.polygon.centroid if zone and not zone.polygon.empty else None
+        context['map_center'] = {'lat': point.y, 'lng': point.x} if point else {'lat': 5.9396, 'lng': 80.5760}
         context['google_maps_api_key'] = getattr(settings, 'GOOGLE_MAPS_API_KEY', '')
         return context
 
 
+@method_decorator(ensure_csrf_cookie, name='dispatch')
+class DeliveryZoneAdminView(VendorMapContextMixin, TemplateView):
+    template_name = 'orders/delivery_zone_map.html'
+
+
+
 ##################################################################################### Daily Assignment API & Views ###############################################################
 
-class DailySummaryAPIView(APIView):
-    permission_classes = [AllowAny]
+class DispatchAPIView(APIView):
+    authentication_classes = [JWTAuthentication, SessionAuthentication]
+    permission_classes = [IsPlatformAdmin]
+
+
+class DailySummaryAPIView(DispatchAPIView):
 
     def get(self, request, *args, **kwargs):
         colombo_tz = pytz.timezone('Asia/Colombo')
@@ -339,8 +220,8 @@ class DailySummaryAPIView(APIView):
 
         summary = OrderItem.objects.filter(
             order__created_at__range=(today_start, today_end)
-        ).values(
-            product_name=F('product__name')
+        ).exclude(order__status='cancelled').values(
+            vendor_id=F('order__vendor_id'), vendor_name=F('order__vendor__shop_name'), product_name=F('product__name')
         ).annotate(
             total_quantity=Sum('quantity')
         ).order_by('-total_quantity')
@@ -348,8 +229,7 @@ class DailySummaryAPIView(APIView):
         return Response(list(summary))
 
 
-class UnassignedOrdersAPIView(APIView):
-    permission_classes = [AllowAny]
+class UnassignedOrdersAPIView(DispatchAPIView):
 
     def get(self, request, *args, **kwargs):
         colombo_tz = pytz.timezone('Asia/Colombo')
@@ -373,45 +253,34 @@ class UnassignedOrdersAPIView(APIView):
                     'lng': lng,
                     'status': o.status,
                     'total_amount': o.total_amount,
+                    'vendor': o.vendor_id,
+                    'shop_name': o.vendor.shop_name,
                 })
         return Response(result)
 
 
-class BulkAssignRiderAPIView(APIView):
-    permission_classes = [AllowAny]
+class BulkAssignRiderAPIView(DispatchAPIView):
 
     def post(self, request, *args, **kwargs):
-        rider_id = request.data.get('rider_id')
-        order_ids = request.data.get('order_ids', [])
-
-        if not rider_id or not order_ids:
-            return Response({'error': 'rider_id and order_ids are required.'}, status=status.HTTP_400_BAD_REQUEST)
-        
         try:
-            rider = CustomUser.objects.get(id=rider_id, role='rider')
-        except CustomUser.DoesNotExist:
-            return Response({'error': 'Invalid rider.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        updated_count = Order.objects.filter(id__in=order_ids).update(rider=rider)
+            _, updated_count = assign_orders(request.data.get('order_ids'), request.data.get('rider_id'))
+        except AssignmentError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         
         return Response({'message': f'Assigned {updated_count} orders to rider.'})
 
 
-class RidersListAPIView(APIView):
-    permission_classes = [AllowAny]
+class RidersListAPIView(DispatchAPIView):
 
     def get(self, request, *args, **kwargs):
         riders = CustomUser.objects.filter(role='rider', is_active=True).values('id', 'name', 'phone_number')
         return Response(list(riders))
 
 
-class DailyAssignmentAdminView(TemplateView):
+@method_decorator(ensure_csrf_cookie, name='dispatch')
+class DailyAssignmentAdminView(VendorMapContextMixin, TemplateView):
     template_name = 'orders/daily_assignment.html'
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['google_maps_api_key'] = getattr(settings, 'GOOGLE_MAPS_API_KEY', '')
-        return context
 
 class RiderOrdersWithRankAPIView(APIView):
     """
@@ -426,8 +295,8 @@ class RiderOrdersWithRankAPIView(APIView):
     permission_classes = [IsRiderPermission]
     order_model = Order
     serializer_class = RiderOrderSerializer
-    route_collection = 'route_states'
-    select_related_fields = ('user', 'location')
+    route_collection = None
+    select_related_fields = ('user', 'vendor', 'location')
 
     def get(self, request, *args, **kwargs):
         colombo_tz = pytz.timezone('Asia/Colombo')
@@ -448,9 +317,9 @@ class RiderOrdersWithRankAPIView(APIView):
         if mongo_uri:
             try:
                 from pymongo import MongoClient
-                client = MongoClient(mongo_uri)
-                db = client['Game_Kade']
-                collection = db[self.route_collection]
+                client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
+                db = client[getattr(settings, 'MONGO_DATABASE', 'MealDrop')]
+                collection = db[self.route_collection or getattr(settings, 'MONGO_ROUTE_COLLECTION', 'multivendor_route_states')]
                 saved_doc = collection.find_one(
                     {'rider_id': request.user.id, 'date': today_str},
                     {'_id': 0}
@@ -480,7 +349,7 @@ class RiderOrdersWithRankAPIView(APIView):
 class OptimizeRouteAPIView(APIView):
     permission_classes = [IsRiderPermission]
     order_model = Order
-    route_collection = 'route_states'
+    route_collection = None
 
     def post(self, request, *args, **kwargs):
         # 1. Get rider's current lat/lng from request body
@@ -540,7 +409,7 @@ class OptimizeRouteAPIView(APIView):
 
         import requests
         try:
-            response = requests.get(url, params=params)
+            response = requests.get(url, params=params, timeout=15)
             response.raise_for_status()
             data = response.json()
         except Exception as e:
@@ -574,9 +443,9 @@ class OptimizeRouteAPIView(APIView):
 
         try:
             from pymongo import MongoClient
-            client = MongoClient(mongo_uri)
-            db = client['Game_Kade']
-            collection = db[self.route_collection]
+            client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
+            db = client[getattr(settings, 'MONGO_DATABASE', 'MealDrop')]
+            collection = db[self.route_collection or getattr(settings, 'MONGO_ROUTE_COLLECTION', 'multivendor_route_states')]
 
             document = {
                 'rider_id': request.user.id,
@@ -603,7 +472,7 @@ class OptimizeRouteAPIView(APIView):
 
 class GetOptimizedRouteAPIView(APIView):
     permission_classes = [IsRiderPermission]
-    route_collection = 'route_states'
+    route_collection = None
 
     def get(self, request, *args, **kwargs):
         colombo_tz = pytz.timezone('Asia/Colombo')
@@ -616,9 +485,9 @@ class GetOptimizedRouteAPIView(APIView):
 
         try:
             from pymongo import MongoClient
-            client = MongoClient(mongo_uri)
-            db = client['Game_Kade']
-            collection = db[self.route_collection]
+            client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
+            db = client[getattr(settings, 'MONGO_DATABASE', 'MealDrop')]
+            collection = db[self.route_collection or getattr(settings, 'MONGO_ROUTE_COLLECTION', 'multivendor_route_states')]
 
             # Find document for THIS rider and TODAY
             saved_doc = collection.find_one(

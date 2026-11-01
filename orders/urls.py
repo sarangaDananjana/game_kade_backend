@@ -4,11 +4,16 @@ from .views import (
     DailySummaryAPIView, UnassignedOrdersAPIView, BulkAssignRiderAPIView, RidersListAPIView, DailyAssignmentAdminView,
     OptimizeRouteAPIView, GetOptimizedRouteAPIView, RiderOrdersWithRankAPIView
 )
+from .delivery_quotes import BasketDeliveryQuoteView
 
 urlpatterns = [
+    path('create/', OrderViewSet.as_view({'post': 'create'}), name='order-create'),
+    path('delivery-quote/', BasketDeliveryQuoteView.as_view(), name='basket-delivery-quote'),
     # Route Optimization Endpoints
     path('routes/optimize/', OptimizeRouteAPIView.as_view(), name='optimize-route'),
     path('routes/current/', GetOptimizedRouteAPIView.as_view(), name='get-current-route'),
+    path('rider/routes/optimize/', OptimizeRouteAPIView.as_view(), name='rider-optimize-route'),
+    path('rider/routes/current/', GetOptimizedRouteAPIView.as_view(), name='rider-current-route'),
 
     # Order Locations Endpoints
     path('locations/', OrderLocationViewSet.as_view({

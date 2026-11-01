@@ -17,13 +17,13 @@ The quote and order-creation APIs share this calculation. Product IDs, quantitie
 
 ## Deploy and configure
 
-Upload the changed backend source and migrations, then run `python manage.py migrate` in the deployment environment and restart the backend. The new migration is `multivender/0006_minimum_delivery_charge_per_parcel`; include earlier pending migrations from this workspace too.
+Upload the changed backend source and migrations, then run `python manage.py migrate` in the deployment environment and restart the backend. Delivery tiers now belong to `orders.DeliveryDistanceTier`. Include the complete multi-vendor upgrade described in [MULTIVENDOR_MIGRATION.md](MULTIVENDOR_MIGRATION.md), together with any earlier pending migrations.
 
 In Django admin, open **Delivery distance tiers** and set `minimum_delivery_charge_per_parcel` for every tier you serve, including tier 0. Existing rows start with this value unset. This is intentional: quotes return an explicit configuration error until a real minimum is provided. No minimum prices are invented. A configured zero is valid if free delivery at the cap is intended. Each minimum must be at least zero and no greater than that tier's delivery fee.
 
 ## Quote API
 
-`POST /shop/orders/delivery-quote/`
+`POST /api/orders/delivery-quote/` (`/shop/orders/delivery-quote/` remains a compatible alias.)
 
 ```json
 {
@@ -42,4 +42,4 @@ The response includes aggregate `subtotal`, `delivery_fee`, `delivery_discount`,
 
 Errors use a `code` and `detail`. Missing minimums or stepped tiers return HTTP 422. Unavailable quantities can still be priced but return `can_checkout: false` and issues to resolve.
 
-When placing each kitchen's order, send the quoted `total_amount` as `expected_total_amount` to `/shop/orders/create/`. If server prices or delivery charges have changed, order creation rejects the mismatch rather than silently charging the new amount.
+When placing each kitchen's order, send the quoted `total_amount` as `expected_total_amount` to `/api/orders/create/`. If server prices or delivery charges have changed, order creation rejects the mismatch rather than silently charging the new amount.

@@ -1,2 +1,12 @@
 .venv
 .env.prod
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+.test-media/
+.test-results/
+handover/
+staticfiles/
+media/

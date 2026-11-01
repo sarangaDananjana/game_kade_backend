@@ -633,7 +633,7 @@
 
         async function loadLocations() {
             try {
-                const res = await fetchWithAuth('/shop/locations/');
+                const res = await fetchWithAuth('/api/orders/locations/');
                 const locations = await res.json();
                 const select = document.getElementById('locationSelect');
                 // Keep the "Store Pickup" option and append the rest
@@ -647,7 +647,7 @@
         }
 
         async function loadVendors() {
-            const res = await fetchWithAuth('/shop/vendors/');
+            const res = await fetchWithAuth('/api/vendors/');
             const vendors = await res.json();
             const grid = document.getElementById('vendorsGrid');
             grid.innerHTML = '';
@@ -674,7 +674,7 @@
 
         async function loadOrders() {
             try {
-                const res = await fetchWithAuth('/shop/orders/');
+                const res = await fetchWithAuth('/api/orders/');
                 const orders = await res.json();
                 const container = document.getElementById('ordersList');
                 container.innerHTML = '';
@@ -738,7 +738,7 @@
                 </div>
             `;
             
-            const res = await fetchWithAuth(`/shop/vendors/${id}/`);
+            const res = await fetchWithAuth(`/api/vendors/${id}/`);
             const vendor = await res.json();
             
             const grid = document.getElementById('productsGrid');
@@ -843,7 +843,7 @@
             };
 
             try {
-                const res = await fetchWithAuth('/shop/orders/create/', {
+                const res = await fetchWithAuth('/api/orders/create/', {
                     method: 'POST',
                     body: JSON.stringify(orderData)
                 });

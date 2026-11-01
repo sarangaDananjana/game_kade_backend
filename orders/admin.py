@@ -2,13 +2,13 @@ from django.contrib.gis import admin
 from django.urls import path
 from django.core.serializers import serialize
 from django.template.response import TemplateResponse
-from .models import OrderLocation, Order, OrderItem, DeliveryZone
+from .models import OrderLocation, Order, OrderItem, DeliveryZone, DeliveryDistanceTier
 
 
 @admin.register(OrderLocation)
 class OrderLocationAdmin(admin.ModelAdmin):
-    list_display = ('name', 'user', 'unique_identity', 'is_system_defined')
-    list_filter = ('is_system_defined',)
+    list_display = ('name', 'user', 'district', 'unique_identity', 'is_system_defined', 'h3_index')
+    list_filter = ('is_system_defined', 'district')
     search_fields = ('name', 'description', 'unique_identity',
                      'user__phone_number', 'user__name')
 
@@ -23,10 +23,10 @@ class OrderItemInline(admin.TabularInline):
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ('id', 'user', 'status', 'total_amount', 'created_at')
-    list_filter = ('status', 'created_at')
-    search_fields = ('user__phone_number', 'user__name', 'delivery_code')
-    readonly_fields = ('delivery_code', 'created_at')
+    list_display = ('id', 'vendor', 'user', 'rider', 'status', 'total_amount', 'delivery_fee', 'created_at')
+    list_filter = ('vendor', 'status', 'created_at')
+    search_fields = ('user__phone_number', 'user__name', 'vendor__shop_name', 'delivery_code')
+    readonly_fields = ('delivery_code', 'legacy_delivery_code', 'created_at')
     inlines = [OrderItemInline]
     # Quickly change order status from the list view
     list_editable = ('status',)
@@ -75,3 +75,10 @@ class DeliveryZoneAdmin(admin.GISModelAdmin):
         zones = DeliveryZone.objects.filter(is_active=True)
         extra_context['existing_zones_geojson'] = serialize('geojson', zones, geometry_field='polygon', fields=('name',))
         return super().add_view(request, form_url, extra_context=extra_context)
+
+
+@admin.register(DeliveryDistanceTier)
+class DeliveryDistanceTierAdmin(admin.ModelAdmin):
+    list_display = ('grid_distance', 'delivery_fee', 'minimum_delivery_charge_per_parcel')
+    list_editable = ('delivery_fee', 'minimum_delivery_charge_per_parcel')
+    ordering = ('grid_distance',)

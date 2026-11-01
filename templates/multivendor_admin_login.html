@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Game Kade MultiVendor — Admin Login</title>
+    <title>Meal Drop — Admin Login</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -231,7 +231,7 @@
             <div class="brand-icon">
                 <i class="fa-solid fa-store"></i>
             </div>
-            <h1 class="brand-title">Game Kade <span>MultiVendor</span></h1>
+            <h1 class="brand-title">Meal Drop</h1>
             <p class="brand-subtitle">Operations & Rider Dispatch Command Center</p>
             <div class="badge-admin">
                 <i class="fa-solid fa-shield-halved"></i> Admin Access Only
@@ -245,7 +245,7 @@
         </div>
         {% endif %}
 
-        <form method="POST" action="{% url 'multivendor-admin-login' %}{% if next %}?next={{ next }}{% endif %}">
+        <form method="POST" action="{% url 'dispatch-login' %}{% if next %}?next={{ next|urlencode }}{% endif %}">
             {% csrf_token %}
             <input type="hidden" name="next" value="{{ next }}">
 
