@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     'products',
     'orders',
     'vendors',
+    'riders',
     'multivender',  # Historical migrations and compatibility routes only.
 ]
 
