@@ -23,8 +23,10 @@ def profile_completion(profile):
     tasks = [
         {'id': 'name', 'title': 'Your name', 'description': 'The name the kitchen and customers will see.',
          'is_complete': bool((profile.user.name or '').strip())},
-        {'id': 'vehicle', 'title': 'Vehicle details', 'description': 'Your vehicle type and registration number.',
-         'is_complete': profile.vehicle_type == 'bicycle' or bool((profile.vehicle_registration or '').strip())},
+        {'id': 'vehicle', 'title': 'Vehicle details', 'description': 'Your vehicle model, colour, and registration number.',
+         'is_complete': profile.vehicle_type in ['motorcycle', 'scooter', 'bicycle', 'car']
+            and bool((profile.vehicle_name or '').strip()) and bool((profile.vehicle_colour or '').strip())
+            and (profile.vehicle_type == 'bicycle' or bool((profile.vehicle_registration or '').strip()))},
         {'id': 'emergency', 'title': 'Emergency contact', 'description': 'A phone number we can use in an emergency.',
          'is_complete': contact_complete},
     ]

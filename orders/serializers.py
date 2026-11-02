@@ -119,8 +119,8 @@ class OrderSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Order
-        fields = ['id', 'vendor', 'shop_name', 'location', 'location_name', 'status', 'subtotal', 'total_amount', 'delivery_fee', 'delivery_code', 'delivery_pin', 'qr_payload', 'expected_total_amount', 'created_at', 'items']
-        read_only_fields = ['status', 'delivery_code', 'created_at', 'total_amount', 'delivery_fee', 'subtotal']
+        fields = ['id', 'unique_identity', 'vendor', 'shop_name', 'location', 'location_name', 'status', 'subtotal', 'total_amount', 'delivery_fee', 'delivery_code', 'delivery_pin', 'qr_payload', 'expected_total_amount', 'created_at', 'items']
+        read_only_fields = ['unique_identity', 'status', 'delivery_code', 'created_at', 'total_amount', 'delivery_fee', 'subtotal']
 
     def get_subtotal(self, obj):
         return sum(item.price_at_purchase * item.quantity for item in obj.items.all())

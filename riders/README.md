@@ -39,7 +39,7 @@ Create links through `SessionOrder.objects.create(session=session, order=order, 
 
 `RiderInfo.user` is one-to-one with a rider user. Migration `0002_existing_rider_profiles` creates profiles for existing riders; a user-save signal creates one when a new or existing user receives the `rider` role. The legacy availability flag does not control new job offers. Active rider accounts receive addressed offers and can accept them before expiry.
 
-Profile completion is computed from saved name, vehicle details, and emergency contact; a bicycle does not require a registration number. The API returns task rows and completed/remaining totals. These counts are derived rather than stored, and incomplete details do not prevent receiving or accepting jobs.
+Profile completion is computed from saved name, vehicle details, and emergency contact; a bicycle does not require a registration number. The API returns task rows and completed/remaining totals. These counts are derived rather than stored, and vehicle make/model and colour are required, and incomplete profiles cannot receive or accept new jobs.
 
 Dashboard numbers are calculated from session and attempt records. Weekly/monthly counters are not stored on the profile, so there are no resets or duplicate totals to synchronize.
 
@@ -70,4 +70,4 @@ The rider services update the existing `Order.rider` and session membership in a
 
 Confirm finances after completing a run and recording the actual rider cut, platform share, fuel addition, and settlement timestamp. Rates, points rules, GPS distance collection, payment adjustments, and payouts are not assumed by the models.
 
-Apply the app migrations in the deployment environment with `python manage.py migrate`. These migrations add rider tables/profiles and do not alter existing orders or delivery-zone data.
+Apply the app migrations in the deployment environment with `python manage.py migrate`. Migration `0005` adds vehicle make/model and colour; `orders.0007` assigns stable readable order names and repairs legacy private location names. Existing orders, customers, kitchens, and delivery zones remain in place.

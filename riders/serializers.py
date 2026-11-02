@@ -21,7 +21,7 @@ class RiderProfileSerializer(serializers.ModelSerializer):
         fields = ['id', 'user_id', 'name', 'phone', 'is_available', 'score', 'score_updated_at', 'score_version',
                   'job_acceptance_window', 'cancelled_sessions_count', 'last_cancelled_at', 'total_penalties_count',
                   'last_penalty_at', 'penalty_balance', 'penalty_points', 'vehicle_type', 'vehicle_registration',
-                  'emergency_contact', 'profile_photo', 'created_at', 'profile_completion']
+                  'vehicle_name', 'vehicle_colour', 'emergency_contact', 'profile_photo', 'created_at', 'profile_completion']
         read_only_fields = fields
 
 
@@ -112,6 +112,8 @@ class ProfileUpdateSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=255, required=False, allow_blank=False)
     vehicle_type = serializers.ChoiceField(choices=['motorcycle', 'scooter', 'bicycle', 'car'], required=False)
     vehicle_registration = serializers.CharField(max_length=30, required=False, allow_blank=True)
+    vehicle_name = serializers.CharField(max_length=80, required=False, allow_blank=True)
+    vehicle_colour = serializers.CharField(max_length=40, required=False, allow_blank=True)
     emergency_contact = serializers.CharField(max_length=20, required=False, allow_blank=True)
 
     def validate_emergency_contact(self, value):

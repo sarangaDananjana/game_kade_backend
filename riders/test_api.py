@@ -203,6 +203,7 @@ class RiderApiTests(OrderFixtures):
         self.assertEqual(result.status_code, 200, result.data)
 
     def test_profile_tasks_follow_saved_details_and_support_bicycles(self):
+        RiderInfo.objects.filter(user=self.rider).update(vehicle_registration='', vehicle_name='', vehicle_colour='', emergency_contact='')
         self.rider.name = None
         self.rider.save(update_fields=['name'])
         self.auth()
@@ -210,7 +211,7 @@ class RiderApiTests(OrderFixtures):
         self.assertEqual(initial['remaining_tasks'], 3)
         named = self.client.patch('/api/riders/profile/', {'name': 'Saranga'}, format='json')
         self.assertEqual(named.data['profile_completion']['remaining_tasks'], 2)
-        bicycle = self.client.patch('/api/riders/profile/', {'vehicle_type': 'bicycle'}, format='json')
+        bicycle = self.client.patch('/api/riders/profile/', {'vehicle_type': 'bicycle', 'vehicle_name': 'City bicycle', 'vehicle_colour': 'Blue'}, format='json')
         self.assertEqual(bicycle.data['profile_completion']['remaining_tasks'], 1)
         invalid = self.client.patch('/api/riders/profile/', {'emergency_contact': 'invalid'}, format='json')
         self.assertEqual(invalid.status_code, 400)

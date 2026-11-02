@@ -17,14 +17,17 @@ def session_stops(session):
         if order is None or order.location is None:
             continue
         location = order.location
-        key = (round(location.lat, 6), round(location.lng, 6))
+        key = location.pk
         if key not in grouped:
-            grouped[key] = {'location_id': location.pk, 'name': location.name, 'lat': location.lat, 'lng': location.lng,
+            grouped[key] = {'location_id': location.pk, 'name': location.name if location.is_system_defined else location.unique_identity, 'lat': location.lat, 'lng': location.lng,
+                'unique_identity': location.unique_identity, 'is_system_defined': location.is_system_defined,
                 'description': location.description or '', 'landmark': location.unique_identity, 'orders': []}
         # Verification secrets are deliberately absent from rider responses.
-        grouped[key]['orders'].append({'id': order.pk, 'number': f'#{order.pk:04d}', 'attempt_id': link.pk,
+        grouped[key]['orders'].append({'id': order.pk, 'number': str(order.pk), 'attempt_id': link.pk,
+            'unique_identity': order.unique_identity,
             'status': link.status, 'customer_name': order.user.name or 'Customer', 'customer_phone': order.user.phone_number,
-            'total_amount': str(order.total_amount), 'delivery_fee': str(link.delivery_fee),
+            'total_amount': str(order.total_amount), 'delivery_fee': str(order.delivery_fee),
+            'order_value': str(order.total_amount - order.delivery_fee),
             'items': [{'name': item.product.name if item.product else 'Meal', 'quantity': item.quantity,
                        'price': str(item.price_at_purchase)} for item in order.items.all()]})
     stops = list(grouped.values())

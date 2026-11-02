@@ -21,6 +21,13 @@ class OrderFixtures(TestCase):
         cls.owner = CustomUser.objects.create_user('0771000002', role='owner')
         cls.rider = CustomUser.objects.create_user('0771000003', role='rider')
         cls.other_rider = CustomUser.objects.create_user('0771000004', role='rider')
+        for rider in [cls.rider, cls.other_rider]:
+            rider.name = 'Rider'
+            rider.save(update_fields=['name'])
+            profile = rider.rider_info
+            profile.vehicle_registration, profile.vehicle_name, profile.vehicle_colour = 'BHF 2841', 'Bajaj CT 100', 'Black'
+            profile.emergency_contact = '0771000000'
+            profile.save()
         cls.vendor = Vendor.objects.create(owner=cls.owner, shop_name='Dinner kitchen', lat=5.938075, lng=80.581056)
         cls.location = OrderLocation.objects.create(user=cls.customer, name='Boarding', lat=5.938075, lng=80.581056, unique_identity='Blue gate')
         cls.product = Product.objects.create(vendor=cls.vendor, name='Rice and curry', price='320.00', stock_quantity=100)

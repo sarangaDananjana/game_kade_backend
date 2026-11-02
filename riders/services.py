@@ -11,6 +11,7 @@ from orders.models import Order
 from orders.services.delivery_codes import delivery_code_matches
 from vendors.models import Vendor
 from .models import JobOffer, RiderCancellation, RiderInfo, RiderPenalty, Session, SessionOrder
+from .profile import profile_completion
 
 
 class RiderActionError(ValueError):
@@ -39,7 +40,7 @@ def _offer_next(session, now=None):
         profile = RiderInfo.objects.select_for_update(of=('self',), skip_locked=True).select_related('user').filter(pk=profile_id).first()
         if profile is None:
             continue
-        if not profile.user.is_active or profile.user.role != 'rider' or _active_run(profile.user_id):
+        if not profile.user.is_active or profile.user.role != 'rider' or not profile_completion(profile)['is_complete'] or _active_run(profile.user_id):
             continue
         if JobOffer.objects.filter(rider_id=profile.user_id, status=JobOffer.Status.PENDING).exists():
             continue
@@ -119,6 +120,8 @@ def create_session(vendor_id, order_ids, *, rider_cut=Decimal('0.00'), service_c
             user_id=offer_to_rider, user__role='rider', user__is_active=True).first()
         if profile is None:
             raise RiderActionError('Choose an active rider account.', 'rider_unavailable', 400)
+        if not profile_completion(profile)['is_complete']:
+            raise RiderActionError('This rider must complete their name, vehicle details, and emergency contact first.', 'profile_incomplete', 400)
         if _active_run(profile.user_id) or JobOffer.objects.filter(rider_id=profile.user_id, status='pending').exists():
             raise RiderActionError('This rider already has a session or a pending offer.', 'rider_busy')
         now = timezone.now()
@@ -148,6 +151,8 @@ def _locked_offer(rider, offer_id):
 def accept_offer(rider, offer_id):
     session, offer = _locked_offer(rider, offer_id)
     profile = RiderInfo.objects.select_for_update().get(user=rider)
+    if not profile_completion(profile)['is_complete']:
+        raise RiderActionError('Complete your name, vehicle details, and emergency contact before accepting jobs.', 'profile_incomplete', 403)
     now = timezone.now()
     if offer.status != JobOffer.Status.PENDING or offer.expires_at <= now:
         raise RiderActionError('This offer has expired. Refresh Jobs for the next offer.', 'offer_expired')

@@ -10,11 +10,11 @@ Meal Rider uses the shared Meal Drop users, vendor catalog, and orders. A delive
 - `score`, `score_updated_at`, and `score_version`: latest facts provided by the dedicated scoring backend.
 - `cancelled_sessions_count` and `last_cancelled_at`, backed by timestamped `RiderCancellation` records with reason, stage, released orders, and replacement session.
 - `total_penalties_count`, `last_penalty_at`, `penalty_balance`, and `penalty_points`, backed by `RiderPenalty` records with idempotency references, reason, amount, points, and resolution status.
-- Vehicle type/registration, emergency contact, and optional profile photo.
+- Vehicle type/registration, `vehicle_name` (make/model), `vehicle_colour`, emergency contact, and optional profile photo.
 
 The scorer updates `job_acceptance_window` together with the rider's score. A new `JobOffer` snapshots that window into `acceptance_window` and `expires_at`; changing a profile does not change the deadline on a pending offer. Riders cannot edit scores, penalties, or acceptance windows through their account API. No automatic scoring or monetary cancellation penalty has been invented.
 
-`profile_completion` is derived from the shared user's name, vehicle details, and emergency contact. Its three tasks include titles, descriptions and `is_complete`, with completed/remaining totals. Existing details count immediately; bicycles do not require a registration number. Profile PATCH responses return updated counts. These are computed values, so this feature needs no new database columns. The app shows setup once and keeps unfinished-task reminders in Dashboard and Account; setup does not gate jobs.
+`profile_completion` is derived from the shared user's name, vehicle details, and emergency contact. Its three tasks include titles, descriptions and `is_complete`, with completed/remaining totals. Existing details count immediately; bicycles do not require a registration number. Profile PATCH responses return updated counts. The counts are computed; rider migration `0005` adds the vehicle name/colour fields. The app shows setup once and keeps unfinished-task reminders in Dashboard and Account; all tasks must be complete before automatic/directed offers, acceptance, or legacy order assignment. Existing active runs can still be resolved.
 
 ## Job lifecycle
 
@@ -96,3 +96,11 @@ The four tabs are Dashboard, Jobs, Sessions, and Account. Screens borrow DoorDas
 `python manage.py seed_rider_demo --phone 0721992125` creates labelled sample history for an existing active rider: seven completed sessions (35 deliveries), two cancellation records, two idempotent penalty records, and a private five-order job. The dummy kitchen, product and customer accounts stay inactive; the private job has dispatch disabled so it cannot pass to other riders. Existing name, vehicle registration and emergency contact remain unchanged. If score is missing, the sample sets score 92.40 and a 300-second acceptance window, labelled `demo-v1`. Demo orders use PIN `4821`.
 
 Repeating the command does not duplicate history/counters. `--refresh-offer` renews only an expired private demo offer when the rider is not busy. Run it after syncing these changes if you need another timed test. This command adds development records to the configured database and sends no SMS or notifications.
+
+## Version 2.2 order and admin contract
+
+`Order.unique_identity` is a stable, unique, random two-word name exposed read-only to customers and riders. It carries no verification authority. Session orders return `number` without a hash, `unique_identity`, `order_value`, `delivery_fee`, and `total_amount` (which already includes the fee). PIN/QR verification secrets remain absent from rider responses.
+
+Stops group by saved location ID, carry `is_system_defined` and `unique_identity`, and return the system name for public locations or two-word identity for private locations. Description remains available. Migration `orders.0007` names existing orders and repairs malformed private location identities.
+
+The Django admin session list has rider/status/finance controls and a Save action per row. Assignment synchronizes queued orders, pickup supplies start timestamps/order status, cancellation releases/reassigns remaining work, completion requires resolved attempts, and financial confirmation requires a completed session. Confirmed facts stay locked.

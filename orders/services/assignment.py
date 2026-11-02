@@ -27,5 +27,8 @@ def assign_orders(order_ids, rider_id=None, *, unassign=False):
         rider = get_user_model().objects.filter(pk=_positive_id(rider_id), role='rider', is_active=True).first()
         if rider is None:
             raise AssignmentError('Choose an active registered rider.')
+        from riders.profile import profile_completion
+        if not hasattr(rider, 'rider_info') or not profile_completion(rider.rider_info)['is_complete']:
+            raise AssignmentError('This rider must complete their name, vehicle details, and emergency contact first.')
     count = Order.objects.filter(pk__in=order_ids).exclude(status__in=['cancelled', 'delivered']).update(rider=rider)
     return rider, count

@@ -15,7 +15,7 @@ class RiderDemoSeedTests(OrderFixtures):
         call_command('seed_rider_demo', phone=phone, stdout=StringIO())
         profile = self.rider.rider_info
         profile.refresh_from_db()
-        self.assertEqual(profile_completion(profile)['remaining_tasks'], 2)
+        self.assertEqual(profile_completion(profile)['remaining_tasks'], 0)
         self.assertEqual(profile.cancelled_sessions_count, 2)
         self.assertEqual(profile.total_penalties_count, 2)
         self.assertEqual(profile.stats()['delivered_orders'], 35)

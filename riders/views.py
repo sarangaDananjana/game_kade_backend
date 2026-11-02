@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 
 from vendors.permissions import IsPlatformAdmin
 from .models import JobOffer, RiderInfo, Session
+from .profile import profile_completion
 from .serializers import (CancellationSerializer, JobOfferSerializer, PenaltySerializer,
     ProfileUpdateSerializer, RiderProfileSerializer, SessionCreateSerializer, SessionSerializer)
 from .services import (RiderActionError, accept_offer, cancel_session, create_session, decline_offer,
@@ -113,6 +114,8 @@ class DashboardView(RiderAPIView):
 class JobsView(RiderAPIView):
     def get(self, request):
         dispatch_due()
+        if not profile_completion(self.profile(request))['is_complete']:
+            return Response({'offers': [], 'server_time': timezone.now(), 'profile_required': True})
         offers = JobOffer.objects.filter(rider=request.user, status='pending', expires_at__gt=timezone.now()).select_related('session__vendor')
         return Response({'offers': JobOfferSerializer(offers, many=True, context={'request': request}).data, 'server_time': timezone.now()})
 

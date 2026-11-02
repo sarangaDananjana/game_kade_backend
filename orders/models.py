@@ -10,6 +10,7 @@ from django.utils import timezone
 
 from core.locations import SpatialLocationMixin
 from .services.delivery_codes import generate_delivery_code
+from .services.identities import generate_order_identity
 
 
 DISTRICT_CHOICES = [('Matara', 'Matara')]
@@ -60,6 +61,20 @@ class OrderLocation(SpatialLocationMixin, models.Model):
     unique_identity = models.CharField(max_length=100, help_text='Two word sentence to identify location')
     is_system_defined = models.BooleanField(default=False)
 
+    def save(self, *args, **kwargs):
+        if not self.is_system_defined and len((self.unique_identity or '').split()) != 2:
+            using = kwargs.get('using') or self._state.db or 'default'
+            for _ in range(100):
+                identity = generate_order_identity()
+                if not type(self).objects.using(using).filter(unique_identity=identity).exclude(pk=self.pk).exists():
+                    self.unique_identity = identity
+                    if kwargs.get('update_fields') is not None:
+                        kwargs['update_fields'] = set(kwargs['update_fields']) | {'unique_identity'}
+                    break
+            else:
+                raise ValidationError('Could not allocate a location name. Please try again.')
+        return super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.name} ({self.unique_identity}) - {'System' if self.is_system_defined else 'User'}"
 
@@ -85,6 +100,8 @@ class Order(models.Model):
     delivery_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     legacy_delivery_code = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     delivery_code = models.CharField(max_length=10, editable=False, unique=True)
+    unique_identity = models.CharField(max_length=100, unique=True, editable=False, default=generate_order_identity,
+        help_text='A two-word order name. This is not a delivery verification code.')
     created_at = models.DateTimeField(default=timezone.now, editable=False)
 
     class Meta:
@@ -98,17 +115,24 @@ class Order(models.Model):
         return self.delivery_code[-4:]
 
     def save(self, *args, **kwargs):
-        if not self._state.adding or self.delivery_code:
+        if not self._state.adding:
             return super().save(*args, **kwargs)
         using = kwargs.get('using') or router.db_for_write(type(self), instance=self)
         for _ in range(32):
-            self.delivery_code = generate_delivery_code(created_at=self.created_at, using=using)
+            if not self.delivery_code:
+                self.delivery_code = generate_delivery_code(created_at=self.created_at, using=using)
             try:
                 with transaction.atomic(using=using):
                     return super().save(*args, **kwargs)
             except IntegrityError:
-                if not type(self).objects.using(using).filter(delivery_code=self.delivery_code).exists():
+                identity_collision = type(self).objects.using(using).filter(unique_identity=self.unique_identity).exists()
+                code_collision = type(self).objects.using(using).filter(delivery_code=self.delivery_code).exists()
+                if not identity_collision and not code_collision:
                     raise
+                if identity_collision:
+                    self.unique_identity = generate_order_identity()
+                if code_collision:
+                    self.delivery_code = ''
         self.delivery_code = ''
         raise ValidationError('Could not allocate a delivery code. Please try placing the order again.')
 

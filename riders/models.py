@@ -32,6 +32,8 @@ class RiderInfo(models.Model):
     penalty_points = models.PositiveIntegerField(default=0)
     vehicle_type = models.CharField(max_length=20, choices=[('motorcycle', 'Motorcycle'), ('scooter', 'Scooter'), ('bicycle', 'Bicycle'), ('car', 'Car')], default='motorcycle')
     vehicle_registration = models.CharField(max_length=30, blank=True)
+    vehicle_name = models.CharField(max_length=80, blank=True, help_text='Make and model, e.g. Bajaj CT 100.')
+    vehicle_colour = models.CharField(max_length=40, blank=True)
     emergency_contact = models.CharField(max_length=20, blank=True)
     profile_photo = models.ImageField(upload_to='rider_profiles/', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -178,6 +180,12 @@ class Session(models.Model):
                 errors['assigned_rider'] = 'Sessions can be assigned only to rider users.'
             elif self.status in [self.Status.PLANNED, self.Status.ACCEPTED, self.Status.IN_PROGRESS] and not rider.is_active:
                 errors['assigned_rider'] = 'Choose an active rider.'
+            elif self.status in [self.Status.ACCEPTED, self.Status.IN_PROGRESS]:
+                from .profile import profile_completion
+                already_assigned = not self._state.adding and type(self).objects.filter(pk=self.pk,
+                    assigned_rider_id=self.assigned_rider_id, status__in=[self.Status.ACCEPTED, self.Status.IN_PROGRESS]).exists()
+                if not already_assigned and (not hasattr(rider, 'rider_info') or not profile_completion(rider.rider_info)['is_complete']):
+                    errors['assigned_rider'] = 'The rider must complete their name, vehicle details, and emergency contact before receiving jobs.'
         if self.started_at and self.finished_at and self.finished_at < self.started_at:
             errors['finished_at'] = 'The finish cannot be before the start.'
         if self.status == self.Status.IN_PROGRESS and (not self.started_at or self.finished_at):
