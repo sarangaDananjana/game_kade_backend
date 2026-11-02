@@ -173,7 +173,8 @@ class RiderApiTests(OrderFixtures):
         self.order.refresh_from_db()
         self.assertIsNone(self.order.rider_id)
         self.assertEqual(self.order.status, 'preparing')
-        self.client.post('/api/riders/availability/', {'is_available': False}, format='json')
+        self.rider.is_active = False
+        self.rider.save(update_fields=['is_active'])
         replacement = create_session(self.vendor.pk, [self.order.pk], dispatch_enabled=True)
         offer = replacement.job_offers.get(status='pending')
         self.auth(self.other_rider)
@@ -189,3 +190,44 @@ class RiderApiTests(OrderFixtures):
         Session.objects.filter(pk=session.pk).update(vendor=None, dispatch_enabled=True)
         dispatch_due()
         self.assertFalse(session.job_offers.exists())
+
+    def test_jobs_arrive_and_can_be_accepted_without_going_online(self):
+        RiderInfo.objects.all().update(is_available=False)
+        session = self.session()
+        offer = session.job_offers.get(status='pending')
+        self.assertEqual(offer.rider_id, self.rider.pk)
+        self.auth()
+        self.client.post('/api/riders/availability/', {'is_available': False}, format='json')
+        self.assertEqual(self.client.get('/api/riders/jobs/').data['offers'][0]['id'], offer.pk)
+        result = self.client.post(f'/api/riders/jobs/{offer.pk}/accept/', {}, format='json')
+        self.assertEqual(result.status_code, 200, result.data)
+
+    def test_profile_tasks_follow_saved_details_and_support_bicycles(self):
+        self.rider.name = None
+        self.rider.save(update_fields=['name'])
+        self.auth()
+        initial = self.client.get('/api/riders/profile/').data['profile_completion']
+        self.assertEqual(initial['remaining_tasks'], 3)
+        named = self.client.patch('/api/riders/profile/', {'name': 'Saranga'}, format='json')
+        self.assertEqual(named.data['profile_completion']['remaining_tasks'], 2)
+        bicycle = self.client.patch('/api/riders/profile/', {'vehicle_type': 'bicycle'}, format='json')
+        self.assertEqual(bicycle.data['profile_completion']['remaining_tasks'], 1)
+        invalid = self.client.patch('/api/riders/profile/', {'emergency_contact': 'invalid'}, format='json')
+        self.assertEqual(invalid.status_code, 400)
+        complete = self.client.patch('/api/riders/profile/', {'emergency_contact': '+94 77 123 4567'}, format='json')
+        self.assertTrue(complete.data['profile_completion']['is_complete'])
+        self.assertEqual(complete.data['emergency_contact'], '+94771234567')
+        self.assertEqual(self.client.get('/api/riders/dashboard/').data['profile']['profile_completion']['remaining_tasks'], 0)
+
+    def test_managers_can_address_the_initial_offer_to_an_offline_rider(self):
+        admin = CustomUser.objects.create_user('0777773003', role='admin')
+        self.client.force_authenticate(admin)
+        RiderInfo.objects.filter(user=self.other_rider).update(is_available=False)
+        result = self.client.post('/api/riders/admin/sessions/', {
+            'vendor': self.vendor.pk, 'orders': [self.order.pk], 'rider_cut': '100.00', 'service_charge': '20.00',
+            'offer_to_rider': self.other_rider.pk,
+        }, format='json')
+        self.assertEqual(result.status_code, 201, result.data)
+        session = Session.objects.get(pk=result.data['id'])
+        self.assertIsNone(session.assigned_rider_id)
+        self.assertEqual(session.job_offers.get(status='pending').rider_id, self.other_rider.pk)

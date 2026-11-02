@@ -37,7 +37,9 @@ Create links through `SessionOrder.objects.create(session=session, order=order, 
 
 ## RiderInfo and dashboard statistics
 
-`RiderInfo.user` is one-to-one with a rider user. The profile stores availability and profile timestamps. Migration `0002_existing_rider_profiles` creates profiles for existing riders; a user-save signal creates one when a new or existing user receives the `rider` role.
+`RiderInfo.user` is one-to-one with a rider user. Migration `0002_existing_rider_profiles` creates profiles for existing riders; a user-save signal creates one when a new or existing user receives the `rider` role. The legacy availability flag does not control new job offers. Active rider accounts receive addressed offers and can accept them before expiry.
+
+Profile completion is computed from saved name, vehicle details, and emergency contact; a bicycle does not require a registration number. The API returns task rows and completed/remaining totals. These counts are derived rather than stored, and incomplete details do not prevent receiving or accepting jobs.
 
 Dashboard numbers are calculated from session and attempt records. Weekly/monthly counters are not stored on the profile, so there are no resets or duplicate totals to synchronize.
 

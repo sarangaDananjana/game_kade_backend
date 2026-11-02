@@ -14,11 +14,15 @@ Meal Rider uses the shared Meal Drop users, vendor catalog, and orders. A delive
 
 The scorer updates `job_acceptance_window` together with the rider's score. A new `JobOffer` snapshots that window into `acceptance_window` and `expires_at`; changing a profile does not change the deadline on a pending offer. Riders cannot edit scores, penalties, or acceptance windows through their account API. No automatic scoring or monetary cancellation penalty has been invented.
 
+`profile_completion` is derived from the shared user's name, vehicle details, and emergency contact. Its three tasks include titles, descriptions and `is_complete`, with completed/remaining totals. Existing details count immediately; bicycles do not require a registration number. Profile PATCH responses return updated counts. These are computed values, so this feature needs no new database columns. The app shows setup once and keeps unfinished-task reminders in Dashboard and Account; setup does not gate jobs.
+
 ## Job lifecycle
 
 Managers create a planned session from active delivery orders belonging to one vendor. Its quoted rider cut, platform service charge, fuel addition, and optional duration/distance estimates remain visible to the rider before acceptance. Set `dispatch_enabled` or use the admin dispatch action to offer it.
 
-The dispatcher picks an online, active rider who has no accepted/running session or other pending offer, preferring higher scores and older offer times. An ignored deadline expires; a declined offer closes; the session passes to another eligible rider using that rider's own window. Exhausted candidates are revisited after five minutes. Only the addressed rider may accept, and acceptance binds the shared orders to that rider atomically.
+The dispatcher picks an active rider account that has no accepted/running session or other pending offer, preferring higher scores and older offer times. Riders do not need to go online. The legacy `is_available` field and availability endpoint are retained for older clients but do not gate, withdraw, or prevent acceptance of offers. An ignored deadline expires; a declined offer closes; the session passes to another eligible rider using that rider's own window. Exhausted candidates are revisited after five minutes. Only the addressed rider may accept, and acceptance binds the shared orders to that rider atomically.
+
+Managers may include `offer_to_rider` with the shared rider user ID in session creation to address the initial offer explicitly. Assignment still occurs only after acceptance; busy/inactive riders are rejected. Subsequent handoff uses the dispatcher when dispatch is enabled.
 
 After acceptance, confirm pickup to start the run. Stops cluster coordinates to six decimal places and sort by distance from the vendor, nearest first. The map shows the pickup and numbered clusters. External Google Maps navigation provides driving directions; the overview polyline shows stop sequence, not a turn-by-turn road route.
 
@@ -33,7 +37,7 @@ All rider endpoints require JWT authentication and `user.role == rider`; admin e
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
 | GET / PATCH | `/api/riders/profile/` | Rider profile and editable account details |
-| POST | `/api/riders/availability/` | Set `is_available` |
+| POST | `/api/riders/availability/` | Legacy flag only; does not control job offers |
 | GET | `/api/riders/dashboard/?period=week` | Today/week/month/lifetime statistics, profile, earnings series, recent events |
 | GET | `/api/riders/jobs/` | Pending addressed offers and server time |
 | POST | `/api/riders/jobs/<offer>/accept/` | Accept before the deadline |
@@ -86,3 +90,9 @@ The app defaults to `https://mealdrop.shop/`, uses the new rider endpoints, and 
 Debug-only review intents provide labelled synthetic activity without logging into or changing a server account. Review PIN `4821` and QR payload `2611024821` work only in that in-memory review repository. Production handover always calls the authenticated backend.
 
 The four tabs are Dashboard, Jobs, Sessions, and Account. Screens borrow DoorDash Dasher's hierarchy and pickup/delivery progression and inDrive's map-led offer structure, adapted to Android Material navigation, sheets, insets, larger type, and dark theme.
+
+## Development rider data
+
+`python manage.py seed_rider_demo --phone 0721992125` creates labelled sample history for an existing active rider: seven completed sessions (35 deliveries), two cancellation records, two idempotent penalty records, and a private five-order job. The dummy kitchen, product and customer accounts stay inactive; the private job has dispatch disabled so it cannot pass to other riders. Existing name, vehicle registration and emergency contact remain unchanged. If score is missing, the sample sets score 92.40 and a 300-second acceptance window, labelled `demo-v1`. Demo orders use PIN `4821`.
+
+Repeating the command does not duplicate history/counters. `--refresh-offer` renews only an expired private demo offer when the rider is not busy. Run it after syncing these changes if you need another timed test. This command adds development records to the configured database and sends no SMS or notifications.

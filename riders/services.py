@@ -32,14 +32,14 @@ def _offer_next(session, now=None):
     if session.job_offers.filter(status=JobOffer.Status.PENDING).exists():
         return None
     excluded = session.job_offers.filter(offered_at__gte=now - timedelta(minutes=5)).values_list('rider_reference', flat=True)
-    candidates = RiderInfo.objects.filter(is_available=True, user__role='rider', user__is_active=True).exclude(user_id__in=excluded)
+    candidates = RiderInfo.objects.filter(user__role='rider', user__is_active=True).exclude(user_id__in=excluded)
     candidates = candidates.annotate(last_offer=Max('user__rider_job_offers__offered_at')).order_by(F('score').desc(nulls_last=True), F('last_offer').asc(nulls_first=True), 'pk')
     for profile_id in candidates.values_list('pk', flat=True):
         # Dispatch must not wait on profiles held by another session action.
         profile = RiderInfo.objects.select_for_update(of=('self',), skip_locked=True).select_related('user').filter(pk=profile_id).first()
         if profile is None:
             continue
-        if not profile.is_available or not profile.user.is_active or _active_run(profile.user_id):
+        if not profile.user.is_active or profile.user.role != 'rider' or _active_run(profile.user_id):
             continue
         if JobOffer.objects.filter(rider_id=profile.user_id, status=JobOffer.Status.PENDING).exists():
             continue
@@ -85,7 +85,7 @@ def dispatch_due(now=None, limit=100):
 @transaction.atomic
 def create_session(vendor_id, order_ids, *, rider_cut=Decimal('0.00'), service_charge=Decimal('0.00'),
                    fuel_surge_addition=Decimal('0.00'), estimated_minutes=None, estimated_distance=None,
-                   dispatch_enabled=False, date=None):
+                   dispatch_enabled=False, date=None, offer_to_rider=None):
     vendor = Vendor.objects.filter(pk=vendor_id).first()
     if vendor is None:
         raise RiderActionError('This kitchen no longer exists.', 'vendor_not_found', 404)
@@ -114,7 +114,18 @@ def create_session(vendor_id, order_ids, *, rider_cut=Decimal('0.00'), service_c
     for order in orders:
         order.rider_id = None
         SessionOrder.objects.create(session=session, order=order)
-    if dispatch_enabled:
+    if offer_to_rider is not None:
+        profile = RiderInfo.objects.select_for_update(of=('self',)).select_related('user').filter(
+            user_id=offer_to_rider, user__role='rider', user__is_active=True).first()
+        if profile is None:
+            raise RiderActionError('Choose an active rider account.', 'rider_unavailable', 400)
+        if _active_run(profile.user_id) or JobOffer.objects.filter(rider_id=profile.user_id, status='pending').exists():
+            raise RiderActionError('This rider already has a session or a pending offer.', 'rider_busy')
+        now = timezone.now()
+        JobOffer.objects.create(session=session, rider=profile.user, rider_reference=profile.user_id,
+            acceptance_window=profile.job_acceptance_window, offered_at=now,
+            expires_at=now + timedelta(seconds=profile.job_acceptance_window))
+    elif dispatch_enabled:
         _offer_next(session)
     return session
 
@@ -142,8 +153,6 @@ def accept_offer(rider, offer_id):
         raise RiderActionError('This offer has expired. Refresh Jobs for the next offer.', 'offer_expired')
     if session.status != Session.Status.PLANNED or session.assigned_rider_id or _active_run(rider.pk):
         raise RiderActionError('A delivery run is already active, or this job has been taken.', 'session_unavailable')
-    if not profile.is_available:
-        raise RiderActionError('Go online before accepting this job.', 'rider_offline', 400)
     offer.status, offer.responded_at = JobOffer.Status.ACCEPTED, now
     offer.save(update_fields=['status', 'responded_at'])
     session.assigned_rider, session.status, session.dispatch_enabled = rider, Session.Status.ACCEPTED, False

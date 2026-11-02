@@ -4,19 +4,24 @@ from rest_framework import serializers
 
 from .models import JobOffer, RiderCancellation, RiderInfo, RiderPenalty, Session
 from .routes import distance_km, session_stops
+from .profile import normalize_contact, profile_completion
 
 
 class RiderProfileSerializer(serializers.ModelSerializer):
     name = serializers.CharField(source='user.name', read_only=True)
     phone = serializers.CharField(source='user.phone_number', read_only=True)
     user_id = serializers.IntegerField(read_only=True)
+    profile_completion = serializers.SerializerMethodField()
+
+    def get_profile_completion(self, obj):
+        return profile_completion(obj)
 
     class Meta:
         model = RiderInfo
         fields = ['id', 'user_id', 'name', 'phone', 'is_available', 'score', 'score_updated_at', 'score_version',
                   'job_acceptance_window', 'cancelled_sessions_count', 'last_cancelled_at', 'total_penalties_count',
                   'last_penalty_at', 'penalty_balance', 'penalty_points', 'vehicle_type', 'vehicle_registration',
-                  'emergency_contact', 'profile_photo', 'created_at']
+                  'emergency_contact', 'profile_photo', 'created_at', 'profile_completion']
         read_only_fields = fields
 
 
@@ -109,6 +114,12 @@ class ProfileUpdateSerializer(serializers.Serializer):
     vehicle_registration = serializers.CharField(max_length=30, required=False, allow_blank=True)
     emergency_contact = serializers.CharField(max_length=20, required=False, allow_blank=True)
 
+    def validate_emergency_contact(self, value):
+        try:
+            return normalize_contact(value)
+        except ValueError as error:
+            raise serializers.ValidationError(str(error))
+
 
 class SessionCreateSerializer(serializers.Serializer):
     vendor = serializers.IntegerField(min_value=1)
@@ -120,3 +131,5 @@ class SessionCreateSerializer(serializers.Serializer):
     estimated_distance = serializers.DecimalField(max_digits=10, decimal_places=3, min_value=0, required=False)
     dispatch_enabled = serializers.BooleanField(default=True)
     date = serializers.DateField(required=False)
+    offer_to_rider = serializers.IntegerField(min_value=1, required=False,
+        help_text='Optional shared rider user ID for the initial offer. The rider still has to accept.')

@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 from datetime import datetime, timezone
@@ -34,8 +35,18 @@ def write_archive(destination, root, files):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--rider-root', type=Path, default=BACKEND.parent / 'GameKadeRider')
+    parser.add_argument('--backend-tests', type=int, default=122)
+    parser.add_argument('--native-tests', type=int, default=6)
     options = parser.parse_args()
     rider = options.rider_root.resolve()
+    gradle = (rider / 'app/build.gradle.kts').read_text(encoding='utf-8')
+    version = re.search(r'versionName\s*=\s*"([^"]+)"', gradle).group(1)
+    version_code = int(re.search(r'versionCode\s*=\s*(\d+)', gradle).group(1))
+    import xml.etree.ElementTree as ET
+    unit_tests = sum(int(ET.parse(file).getroot().attrib['tests']) for file in (rider/'app/build/test-results/testDebugUnitTest').glob('TEST-*.xml'))
+    backend_name = f'MealDrop-riders-backend-{version}.zip'
+    source_name = f'MealRider-{version}-source.zip'
+    apk_name = f'MealRider-{version}-debug.apk'
     output = BACKEND / 'handover'
     output.mkdir(exist_ok=True)
     required = [rider / 'DESIGN.md', rider / '.impeccable/design.json', rider / 'app/build/outputs/apk/debug/app-debug.apk']
@@ -45,7 +56,7 @@ def main():
 
     names = subprocess.check_output(['git', 'ls-files', '--cached', '--others', '--exclude-standard'], cwd=BACKEND, text=True).splitlines()
     backend_files = [Path(name) for name in names if name and not name.startswith('handover/')]
-    counts = {'MealDrop-riders-backend.zip': write_archive(output / 'MealDrop-riders-backend.zip', BACKEND, backend_files)}
+    counts = {backend_name: write_archive(output / backend_name, BACKEND, backend_files)}
 
     source_files = [Path(name) for name in [
         '.gitignore', 'build.gradle.kts', 'settings.gradle.kts', 'gradle.properties', 'gradlew', 'gradlew.bat',
@@ -53,23 +64,23 @@ def main():
         '.impeccable/design.json', '.impeccable/direction-contract.md', '.impeccable/surfaces/meal-rider.md',
         '.impeccable/review/finish-review.md', '.impeccable/review/native-tests.txt',
     ]]
-    for folder in ['gradle', 'app/src', '.impeccable/review/verdict']:
+    for folder in ['gradle', 'app/src', '.impeccable/review/verdict', '.impeccable/review/profile-tasks']:
         source_files.extend(path.relative_to(rider) for path in (rider / folder).rglob('*') if path.is_file())
-    counts['MealRider-source.zip'] = write_archive(output / 'MealRider-source.zip', rider, source_files)
-    shutil.copyfile(required[-1], output / 'MealRider-2.0.0-debug.apk')
+    counts[source_name] = write_archive(output / source_name, rider, source_files)
+    shutil.copyfile(required[-1], output / apk_name)
 
     artifacts = []
-    for name in ['MealRider-2.0.0-debug.apk', 'MealDrop-riders-backend.zip', 'MealRider-source.zip', 'MealRider-preview.png', 'MealRider-handover.md']:
+    for name in [apk_name, backend_name, source_name, f'MealRider-{version}-preview.png', f'MealRider-{version}-handover.md']:
         file = output / name
         if file.is_file():
             artifacts.append({'file': name, 'bytes': file.stat().st_size, 'sha256': hashlib.sha256(file.read_bytes()).hexdigest(),
                               **({'source_files': counts[name]} if name in counts else {})})
-    manifest = {'application': 'Meal Rider', 'version': '2.0.0', 'version_code': 100, 'build': 'debug',
+    manifest = {'application': 'Meal Rider', 'version': version, 'version_code': version_code, 'build': 'debug',
                 'created_at': datetime.now(timezone.utc).isoformat(), 'artifacts': artifacts,
-                'validation': {'backend_tests': 118, 'android_unit_tests': 10, 'native_instrumentation_tests': 4,
+                'validation': {'backend_tests': options.backend_tests, 'android_unit_tests': unit_tests, 'native_instrumentation_tests': options.native_tests,
                                'migration_drift': False},
                 'deployment': 'Deploy and migrate the backend, and run the rider_dispatcher worker before live use.'}
-    (output / 'MealRider-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
+    (output / f'MealRider-{version}-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
     print(json.dumps({'artifacts': [{'file': item['file'], 'bytes': item['bytes']} for item in artifacts], 'archive_files': counts}, indent=2))
 
 

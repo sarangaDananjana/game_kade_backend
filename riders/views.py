@@ -66,10 +66,7 @@ class AvailabilityView(RiderAPIView):
             profile = RiderInfo.objects.select_for_update().get(user=request.user)
             profile.is_available = data.validated_data['is_available']
             profile.save(update_fields=['is_available', 'updated_at'])
-        # Do not hold a profile lock while waiting on an offer lock.
-        if not profile.is_available:
-            JobOffer.objects.filter(rider=request.user, status='pending').update(status='withdrawn', responded_at=timezone.now())
-        dispatch_due()
+        # Retained for older clients. This flag no longer gates or withdraws job offers.
         return Response(RiderProfileSerializer(self.profile(request), context={'request': request}).data)
 
 
