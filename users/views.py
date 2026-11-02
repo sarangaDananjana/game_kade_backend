@@ -5,10 +5,14 @@ from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from .models import CustomUser, OTP, AppVersion
-from .utils import generate_otp_code, send_otp_sms
+from .utils import generate_otp_code, send_otp_sms, normalize_mobile_number, find_user_by_mobile
+from django.conf import settings
 
 
 class SendOTPView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
     def post(self, request):
         phone_number = request.data.get('phone_number')
         name = request.data.get('name')
@@ -21,9 +25,13 @@ class SendOTPView(APIView):
 
         if not phone_number:
             return Response({'error': 'Phone number is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            phone_number = normalize_mobile_number(phone_number)
+        except ValueError as error:
+            return Response({'error': str(error)}, status=status.HTTP_400_BAD_REQUEST)
 
         # Check if the user exists
-        user = CustomUser.objects.filter(phone_number=phone_number).first()
+        user = find_user_by_mobile(phone_number)
 
         if not user:
             # NEW USER FLOW
@@ -61,7 +69,8 @@ class SendOTPView(APIView):
         OTP.objects.create(user=user, otp_code=otp_code)
 
         # Send SMS via the provided API
-        if phone_number == "0700000000":
+        bypass_sms = phone_number == '0700000000' or phone_number in getattr(settings, 'OTP_SMS_BYPASS_NUMBERS', {'0721992125', '0774610536'})
+        if bypass_sms:
             # Bypass actual SMS sending for the test account to save credits
             sms_sent = True
         else:
@@ -70,13 +79,18 @@ class SendOTPView(APIView):
         if sms_sent:
             return Response({
                 'is_new_user': False,
-                'message': 'OTP sent successfully.'
+                'message': 'Code available in the admin panel.' if bypass_sms else 'OTP sent successfully.',
+                'delivery_method': 'admin' if bypass_sms else 'sms',
+                'otp_length': len(otp_code),
             }, status=status.HTTP_200_OK)
         else:
             return Response({'error': 'Failed to send OTP via SMS.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class VerifyOTPView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
     def post(self, request):
         phone_number = request.data.get('phone_number')
         otp_code = request.data.get('otp_code')
@@ -85,8 +99,11 @@ class VerifyOTPView(APIView):
             return Response({'error': 'Phone number and OTP code are required.'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            user = CustomUser.objects.get(phone_number=phone_number)
-        except CustomUser.DoesNotExist:
+            phone_number = normalize_mobile_number(phone_number)
+        except ValueError as error:
+            return Response({'error': str(error)}, status=status.HTTP_400_BAD_REQUEST)
+        user = find_user_by_mobile(phone_number)
+        if user is None:
             return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
 
         # Find the latest unused OTP for this user

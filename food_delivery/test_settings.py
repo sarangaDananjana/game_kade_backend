@@ -33,6 +33,7 @@ TEMPLATES = [{
 AUTH_USER_MODEL = 'users.CustomUser'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 TIME_ZONE = 'Asia/Colombo'
+OTP_SMS_BYPASS_NUMBERS = {'0721992125', '0774610536'}
 USE_TZ = True
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'

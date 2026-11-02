@@ -137,6 +137,9 @@ LANGUAGE_CODE = 'en-us'
 
 TIME_ZONE = 'Asia/Colombo'
 
+# These test accounts keep their generated OTP in admin without sending an SMS.
+OTP_SMS_BYPASS_NUMBERS = {'0721992125', '0774610536'}
+
 USE_I18N = True
 
 USE_TZ = True
