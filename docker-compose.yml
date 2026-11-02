@@ -14,6 +14,21 @@ services:
     # This command collects static files, runs migrations, and then starts gunicorn
     command: sh -c "python manage.py collectstatic --noinput && python manage.py migrate && gunicorn food_delivery.wsgi:application --bind 0.0.0.0:8000"
     restart: always
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8000), 5).close()"]
+      interval: 10s
+      timeout: 6s
+      retries: 6
+      start_period: 30s
     volumes:
       - ./media:/app/media
       - ./staticfiles:/app/staticfiles
+  rider_dispatcher:
+    build: .
+    env_file:
+      - .env.prod
+    command: python manage.py run_rider_dispatcher --interval 2
+    restart: always
+    depends_on:
+      web:
+        condition: service_healthy

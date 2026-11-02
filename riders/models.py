@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.core.validators import MinValueValidator
+from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models, router, transaction
 from django.utils import timezone
 
@@ -18,8 +18,31 @@ class RiderInfo(models.Model):
         limit_choices_to={'role': 'rider'},
     )
     is_available = models.BooleanField(default=False, help_text='Whether the rider is accepting delivery work.')
+    job_acceptance_window = models.PositiveIntegerField(default=60, validators=[MinValueValidator(5), MaxValueValidator(600)],
+        help_text='Seconds allowed to accept each new offer. Updated by the performance-scoring backend.')
+    score = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal('0.00')), MaxValueValidator(Decimal('100.00'))])
+    score_updated_at = models.DateTimeField(null=True, blank=True)
+    score_version = models.CharField(max_length=64, blank=True)
+    cancelled_sessions_count = models.PositiveIntegerField(default=0)
+    last_cancelled_at = models.DateTimeField(null=True, blank=True)
+    total_penalties_count = models.PositiveIntegerField(default=0)
+    last_penalty_at = models.DateTimeField(null=True, blank=True)
+    penalty_balance = models.DecimalField(max_digits=12, decimal_places=2, default=ZERO, validators=[MinValueValidator(ZERO)])
+    penalty_points = models.PositiveIntegerField(default=0)
+    vehicle_type = models.CharField(max_length=20, choices=[('motorcycle', 'Motorcycle'), ('scooter', 'Scooter'), ('bicycle', 'Bicycle'), ('car', 'Car')], default='motorcycle')
+    vehicle_registration = models.CharField(max_length=30, blank=True)
+    emergency_contact = models.CharField(max_length=20, blank=True)
+    profile_photo = models.ImageField(upload_to='rider_profiles/', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=models.Q(job_acceptance_window__gte=5, job_acceptance_window__lte=600), name='riders_acceptance_window_range'),
+            models.CheckConstraint(condition=models.Q(score__isnull=True) | models.Q(score__gte=0, score__lte=100), name='riders_score_range'),
+            models.CheckConstraint(condition=models.Q(penalty_balance__gte=0), name='riders_penalty_balance_positive'),
+        ]
 
     def clean(self):
         super().clean()
@@ -65,6 +88,7 @@ class RiderInfo(models.Model):
 class Session(models.Model):
     class Status(models.TextChoices):
         PLANNED = 'planned', 'Planned'
+        ACCEPTED = 'accepted', 'Accepted'
         IN_PROGRESS = 'in_progress', 'In progress'
         COMPLETED = 'completed', 'Completed'
         CANCELLED = 'cancelled', 'Cancelled'
@@ -78,7 +102,15 @@ class Session(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='delivery_sessions', limit_choices_to={'role': 'rider'},
     )
-    rider_reference = models.PositiveBigIntegerField(editable=False)
+    rider_reference = models.PositiveBigIntegerField(editable=False, null=True, blank=True)
+    vendor = models.ForeignKey('vendors.Vendor', on_delete=models.SET_NULL, null=True, blank=True, related_name='rider_sessions')
+    estimated_distance = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True, validators=[MinValueValidator(ZERO)])
+    estimated_duration = models.DurationField(null=True, blank=True)
+    dispatch_enabled = models.BooleanField(default=False)
+    dispatch_after = models.DateTimeField(null=True, blank=True)
+    pickup_confirmed_at = models.DateTimeField(null=True, blank=True)
+    completed_orders_count = models.PositiveIntegerField(default=0)
+    dispatch_notes = models.TextField(blank=True)
     orders = models.ManyToManyField('orders.Order', through='SessionOrder', related_name='delivery_sessions', blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PLANNED)
     rider_cut = models.DecimalField(max_digits=12, decimal_places=2, default=ZERO,
@@ -120,8 +152,8 @@ class Session(models.Model):
             models.Index(fields=['assigned_rider', 'date'], name='riders_run_date_idx'),
         ]
         constraints = [
-            models.UniqueConstraint(fields=['assigned_rider'], condition=models.Q(status='in_progress'), name='riders_one_active_run'),
-            models.CheckConstraint(condition=models.Q(status__in=['planned', 'in_progress', 'completed', 'cancelled']), name='riders_run_valid_status'),
+            models.UniqueConstraint(fields=['assigned_rider'], condition=models.Q(status__in=['accepted', 'in_progress']), name='riders_one_active_run'),
+            models.CheckConstraint(condition=models.Q(status__in=['planned', 'accepted', 'in_progress', 'completed', 'cancelled']), name='riders_run_valid_status'),
             models.CheckConstraint(condition=models.Q(finance_status__in=['draft', 'confirmed']), name='riders_run_valid_finance'),
             models.CheckConstraint(condition=models.Q(rider_cut__gte=0, service_charge__gte=0, fuel_surge_addition__gte=0, session_distance__gte=0), name='riders_run_nonnegative'),
             models.CheckConstraint(condition=(models.Q(started_at__isnull=True) | models.Q(finished_at__isnull=True) | models.Q(finished_at__gte=models.F('started_at'))), name='riders_run_time_order'),
@@ -134,13 +166,17 @@ class Session(models.Model):
     def clean(self):
         super().clean()
         errors = {}
-        if self._state.adding and not self.assigned_rider_id:
-            errors['assigned_rider'] = 'Choose a rider for this session.'
+        if self._state.adding and not self.vendor_id:
+            errors['vendor'] = 'Choose the single kitchen for this session.'
+        if self.pk and self.vendor_id and self.session_orders.exclude(order=None).exclude(order__vendor_id=self.vendor_id).exists():
+            errors['vendor'] = 'Every order in a session must belong to its single kitchen.'
+        if self.status in [self.Status.ACCEPTED, self.Status.IN_PROGRESS] and not self.assigned_rider_id:
+            errors['assigned_rider'] = 'Accept the job before starting this session.'
         if self.assigned_rider_id:
             rider = self.assigned_rider
             if rider.role != 'rider':
                 errors['assigned_rider'] = 'Sessions can be assigned only to rider users.'
-            elif self.status in [self.Status.PLANNED, self.Status.IN_PROGRESS] and not rider.is_active:
+            elif self.status in [self.Status.PLANNED, self.Status.ACCEPTED, self.Status.IN_PROGRESS] and not rider.is_active:
                 errors['assigned_rider'] = 'Choose an active rider.'
         if self.started_at and self.finished_at and self.finished_at < self.started_at:
             errors['finished_at'] = 'The finish cannot be before the start.'
@@ -150,7 +186,7 @@ class Session(models.Model):
             errors['status'] = 'A completed session needs start and finish timestamps.'
         if self.pk and self.status in [self.Status.COMPLETED, self.Status.CANCELLED] and self.session_orders.filter(status='queued').exists():
             errors['status'] = 'Resolve or release every queued order before closing the session.'
-        if self.pk and self.assigned_rider_id and self.session_orders.exclude(order=None).exclude(order__rider=None).exclude(order__rider_id=self.assigned_rider_id).exists():
+        if self.pk and self.assigned_rider_id and self.session_orders.filter(status='queued').exclude(order=None).exclude(order__rider=None).exclude(order__rider_id=self.assigned_rider_id).exists():
             errors['assigned_rider'] = 'The session and its assigned orders must have the same rider.'
         if self.pk and self.finished_at and self.session_orders.filter(finished_at__gt=self.finished_at).exists():
             errors['finished_at'] = 'The session cannot finish before one of its delivery attempts.'
@@ -177,7 +213,7 @@ class Session(models.Model):
                     raise ValidationError({'rider_reference': 'The rider reference is set by the assigned rider.'})
                 if previous.finance_status == self.FinanceStatus.CONFIRMED:
                     financial_fields = ['rider_cut', 'service_charge', 'fuel_surge_addition', 'finance_status', 'settled_at',
-                                        'points_awarded', 'session_distance', 'started_at', 'finished_at', 'status', 'date']
+                                        'points_awarded', 'session_distance', 'started_at', 'finished_at', 'status', 'date', 'vendor_id']
                     if any(getattr(previous, name) != getattr(self, name) for name in financial_fields):
                         raise ValidationError('Confirmed session facts cannot be changed; record an adjustment separately.')
                 if previous.assigned_rider_id != self.assigned_rider_id and self.assigned_rider_id:
@@ -240,7 +276,9 @@ class SessionOrder(models.Model):
         if self.finished_at and self.assigned_at and self.finished_at < self.assigned_at:
             errors['finished_at'] = 'The attempt cannot finish before it was assigned.'
         if self.order_id and self.session_id:
-            if self.order.rider_id is not None and self.order.rider_id != self.session.assigned_rider_id:
+            if self.session.vendor_id and self.order.vendor_id != self.session.vendor_id:
+                errors['order'] = 'Every order in a session must belong to its single kitchen.'
+            if self.status == self.Status.QUEUED and self.session.assigned_rider_id and self.order.rider_id is not None and self.order.rider_id != self.session.assigned_rider_id:
                 errors['order'] = 'The order and session must have the same assigned rider.'
             if self.status == self.Status.QUEUED and self.order.status in ['delivered', 'cancelled']:
                 errors['order'] = 'A delivered or cancelled order cannot be queued for another run.'
@@ -269,3 +307,72 @@ class SessionOrder(models.Model):
 
     def __str__(self):
         return f'Order {self.order_reference} in session {self.session_id}'
+
+class JobOffer(models.Model):
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        ACCEPTED = 'accepted', 'Accepted'
+        DECLINED = 'declined', 'Declined'
+        EXPIRED = 'expired', 'Expired'
+        WITHDRAWN = 'withdrawn', 'Withdrawn'
+
+    session = models.ForeignKey(Session, on_delete=models.CASCADE, related_name='job_offers')
+    rider = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='rider_job_offers')
+    rider_reference = models.PositiveBigIntegerField()
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    acceptance_window = models.PositiveIntegerField(validators=[MinValueValidator(5), MaxValueValidator(600)])
+    offered_at = models.DateTimeField(default=timezone.now)
+    expires_at = models.DateTimeField()
+    responded_at = models.DateTimeField(null=True, blank=True)
+    response_reason = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ['-offered_at', '-pk']
+        indexes = [models.Index(fields=['status', 'expires_at'], name='riders_offer_expiry_idx')]
+        constraints = [
+            models.UniqueConstraint(fields=['session'], condition=models.Q(status='pending'), name='riders_one_pending_offer'),
+            models.UniqueConstraint(fields=['rider'], condition=models.Q(status='pending'), name='riders_one_offer_per_rider'),
+            models.CheckConstraint(condition=models.Q(expires_at__gt=models.F('offered_at')), name='riders_offer_time_order'),
+        ]
+
+
+class RiderCancellation(models.Model):
+    rider_info = models.ForeignKey(RiderInfo, on_delete=models.SET_NULL, null=True, related_name='cancellations')
+    rider_reference = models.PositiveBigIntegerField()
+    session = models.ForeignKey(Session, on_delete=models.SET_NULL, null=True, related_name='rider_cancellations')
+    session_reference = models.PositiveBigIntegerField()
+    occurred_at = models.DateTimeField(default=timezone.now)
+    reason = models.CharField(max_length=80)
+    details = models.TextField(blank=True)
+    stage = models.CharField(max_length=20, choices=[('accepted', 'Before pickup'), ('in_progress', 'During delivery')])
+    released_orders_count = models.PositiveIntegerField(default=0)
+    replacement_session = models.ForeignKey(Session, on_delete=models.SET_NULL, null=True, blank=True, related_name='replacement_cancellations')
+
+    class Meta:
+        ordering = ['-occurred_at', '-pk']
+        indexes = [models.Index(fields=['rider_reference', 'occurred_at'], name='riders_cancel_history_idx')]
+        constraints = [models.UniqueConstraint(fields=['session_reference', 'rider_reference'], name='riders_cancel_once_per_run')]
+
+
+class RiderPenalty(models.Model):
+    class Status(models.TextChoices):
+        OUTSTANDING = 'outstanding', 'Outstanding'
+        APPLIED = 'applied', 'Applied'
+        REVERSED = 'reversed', 'Reversed'
+
+    rider_info = models.ForeignKey(RiderInfo, on_delete=models.SET_NULL, null=True, related_name='penalties')
+    rider_reference = models.PositiveBigIntegerField()
+    cancellation = models.ForeignKey(RiderCancellation, on_delete=models.SET_NULL, null=True, blank=True, related_name='penalties')
+    reference = models.CharField(max_length=120, unique=True, help_text='Idempotency reference supplied by the scoring or operations backend.')
+    reason = models.CharField(max_length=255)
+    amount = models.DecimalField(max_digits=12, decimal_places=2, default=ZERO, validators=[MinValueValidator(ZERO)])
+    points = models.PositiveIntegerField(default=0)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.OUTSTANDING)
+    issued_at = models.DateTimeField(default=timezone.now)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-issued_at', '-pk']
+        indexes = [models.Index(fields=['rider_reference', 'issued_at'], name='riders_penalty_history_idx')]
+        constraints = [models.CheckConstraint(condition=models.Q(amount__gte=0), name='riders_penalty_amount_positive')]

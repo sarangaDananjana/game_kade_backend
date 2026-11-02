@@ -18,7 +18,7 @@ START = datetime(2026, 11, 1, 8, 0, tzinfo=datetime_timezone.utc)
 
 class RiderFixtures(OrderFixtures):
     def make_session(self, **changes):
-        data = {'assigned_rider': self.rider, 'date': START.date()}
+        data = {'assigned_rider': self.rider, 'vendor': self.vendor, 'date': START.date()}
         data.update(changes)
         return Session.objects.create(**data)
 

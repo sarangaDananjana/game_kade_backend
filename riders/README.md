@@ -1,10 +1,10 @@
 # Rider data models
 
-This app contains delivery-run records and the data foundation for a rider dashboard. APIs, admin screens, mobile UI, routing, payout rates, and points-award policies are separate work.
+This app contains delivery-run records and rider dashboard data. [MEAL_RIDER_API.md](../MEAL_RIDER_API.md) documents the rider APIs, timed job offers, admin controls, single-vendor session flow, and rebuilt mobile UI. Payout rates, automatic scoring, and points-award policies remain separate from recorded facts.
 
 ## Session
 
-One `Session` is a single delivery run for a rider. Its `orders` relation uses `SessionOrder` so a run can contain orders from several kitchens, and failed attempts can be retained when an order moves to a later run.
+One `Session` is a single delivery run for one vendor. Its `orders` relation uses `SessionOrder` so the kitchen's orders can be clustered by destination, and failed attempts can be retained when an order moves to a later run.
 
 | Field | Meaning |
 | --- | --- |
@@ -12,7 +12,7 @@ One `Session` is a single delivery run for a rider. Its `orders` relation uses `
 | `assigned_rider` | Shared `users.CustomUser` with role `rider` |
 | `rider_reference` | Original rider ID retained if the user account is deleted |
 | `orders` | Existing shared orders; their customer, location, vendor, and items remain accessible |
-| `status` | `planned`, `in_progress`, `completed`, or `cancelled` |
+| `status` | `planned`, `accepted`, `in_progress`, `completed`, or `cancelled` |
 | `rider_cut` | Base rider earnings in LKR, entered as a money amount |
 | `service_charge` | Platform's share of delivery revenue in LKR |
 | `fuel_surge_addition` | Extra rider earnings for fuel in LKR |
@@ -25,7 +25,7 @@ One `Session` is a single delivery run for a rider. Its `orders` relation uses `
 | `points_awarded` | Points credited for the completed run; zero until an award is recorded |
 | `notes`, `created_at`, `updated_at` | Operational notes and record timestamps |
 
-Money amounts and distance cannot be negative. A rider can have several planned runs but only one in progress. Runs cannot close while orders remain queued. A started run keeps its rider, and confirmed financial/run facts cannot be overwritten through model saves.
+Money amounts and distance cannot be negative. A rider can have several planned runs but only one accepted or in-progress run. Runs cannot close while orders remain queued. A started run keeps its rider, and confirmed financial/run facts cannot be overwritten through model saves.
 
 ## SessionOrder
 
@@ -62,9 +62,9 @@ Reports include completed sessions, delivered/failed orders, delivery attempts, 
 - Weeks run Monday to Monday and months follow the calendar in Asia/Colombo. Start dates are inclusive; end dates are exclusive.
 - On-time rate uses only delivered orders with a recorded delivery deadline. Rates without evidence return null. Completed runs with unconfirmed finances are reported in `unconfirmed_revenue_sessions`; draft amounts do not inflate confirmed revenue.
 
-## Integration in the next part
+## Order integration
 
-Assignment services should update the existing `Order.rider` and the session membership together in a transaction. Handover services should update the order and its attempt outcome together, recording the real finish timestamp and any failure/deadline data. The current order APIs are unchanged and do not yet write session outcomes.
+The rider services update the existing `Order.rider` and session membership in a transaction. The new handover API updates the order and its attempt outcome together, recording the real finish timestamp and any failure/deadline data.
 
 Confirm finances after completing a run and recording the actual rider cut, platform share, fuel addition, and settlement timestamp. Rates, points rules, GPS distance collection, payment adjustments, and payouts are not assumed by the models.
 

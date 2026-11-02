@@ -38,6 +38,7 @@ urlpatterns = [
     path('api/products/', include('products.urls')),
     path('api/vendors/', include('vendors.urls')),
     path('api/orders/', include('orders.urls')),
+    path('api/riders/', include('riders.urls')),
     path('dispatch/', include('orders.dispatch_urls')),
     path('menu/', multivendor_web_view, name='marketplace'),
     path('shop/', include('multivender.urls')),

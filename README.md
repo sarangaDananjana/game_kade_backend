@@ -1,6 +1,6 @@
 # Meal Drop backend
 
-Shared Django backend for Meal Drop and MealRider. Every kitchen uses the same catalog, checkout, delivery coverage, pricing, and dispatch system.
+Shared Django backend for Meal Drop and Meal Rider. Every kitchen uses the same catalog, checkout, delivery coverage, pricing, and dispatch system.
 
 | App | Models and responsibility |
 | --- | --- |
@@ -8,12 +8,12 @@ Shared Django backend for Meal Drop and MealRider. Every kitchen uses the same c
 | `vendors` | `Vendor`, shop ownership, images, coordinates, and pickup availability |
 | `products` | Vendor-owned `Product` records and shared `Featured` promotions |
 | `orders` | `Order`, `OrderItem`, saved `OrderLocation` addresses, polygon `DeliveryZone` coverage, and `DeliveryDistanceTier` pricing |
-| `riders` | Delivery `Session` runs, `SessionOrder` attempt history, and one-to-one `RiderInfo` profiles with calculated dashboard statistics |
+| `riders` | Single-vendor `Session` runs, `SessionOrder` attempt history, timed `JobOffer` dispatch, and `RiderInfo` profiles with calculated statistics, scores, cancellation facts, and penalty records |
 | `multivender` | Historical migrations and compatibility imports/routes; no registered models or separate business tables |
 
 Both order API families use `orders.Order`. Product prices come from `products.Product`, and all delivery checks use the existing primary `orders.DeliveryZone` polygon. Orders contain one vendor's items; basket quotes group kitchens independently. Product edits are restricted to the owning vendor or a platform admin. Dispatch and delivery-zone changes require platform admin access.
 
-The [rider model guide](riders/README.md) describes session finances, delivery attempts, and lifetime/weekly/monthly statistics. The rider app currently provides models and reporting helpers; session APIs and UI are the next part.
+The [rider model guide](riders/README.md) describes session finances and statistics. [MEAL_RIDER_API.md](MEAL_RIDER_API.md) documents timed offers, single-vendor sessions, cancellation/penalty records, scorer-controlled acceptance windows, and the rebuilt Meal Rider Android app.
 
 ## API
 
@@ -27,6 +27,9 @@ The [rider model guide](riders/README.md) describes session finances, delivery a
 | Basket quote | `POST /api/orders/delivery-quote/` |
 | Checkout | `POST /api/orders/create/` |
 | Customer history and cancellation | `/api/orders/`, `PATCH /api/orders/<id>/` |
+| Meal Rider dashboard and account | `/api/riders/dashboard/`, `/api/riders/profile/` |
+| Meal Rider job offers | `/api/riders/jobs/`, `/api/riders/jobs/<offer>/accept/`, `/api/riders/jobs/<offer>/decline/` |
+| Meal Rider sessions and handover | `/api/riders/sessions/`, `/api/riders/sessions/<session>/orders/<order>/verify/` |
 | Rider assignments | `/api/orders/rider/orders/`, `/api/orders/rider/orders/with-rank/` |
 | Rider handover | `PATCH /api/orders/rider/orders/<id>/` |
 | Rider routes | `/api/orders/rider/routes/optimize/`, `/api/orders/rider/routes/current/` |
@@ -44,7 +47,7 @@ Follow [MULTIVENDOR_MIGRATION.md](MULTIVENDOR_MIGRATION.md). The upgrade deliber
 
 Use Python 3.12 or newer, PostgreSQL with PostGIS, and the dependencies in `requirements.txt`. Linux/Docker also needs GDAL and GEOS; the Dockerfile installs the GIS dependencies.
 
-The existing Docker configuration reads `.env.prod` and starts the application after running migrations and collecting static files:
+The Docker configuration reads `.env.prod`, runs migrations and collects static files, then starts the web application and the rider offer dispatcher:
 
 ```sh
 docker compose up -d --build

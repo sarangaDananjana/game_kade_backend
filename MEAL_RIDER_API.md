@@ -1,0 +1,88 @@
+# Meal Rider backend and application
+
+Meal Rider uses the shared Meal Drop users, vendor catalog, and orders. A delivery session is bound to **one vendor**. Session offers, accepted runs, location clusters, verification, cancellation history, scores, and penalties now have rider APIs.
+
+## Rider profile
+
+`RiderInfo` retains its existing availability and statistics helpers and adds:
+
+- `job_acceptance_window`: seconds granted to this rider for each new offer, constrained to 5–600 seconds; the new-profile fallback is 60.
+- `score`, `score_updated_at`, and `score_version`: latest facts provided by the dedicated scoring backend.
+- `cancelled_sessions_count` and `last_cancelled_at`, backed by timestamped `RiderCancellation` records with reason, stage, released orders, and replacement session.
+- `total_penalties_count`, `last_penalty_at`, `penalty_balance`, and `penalty_points`, backed by `RiderPenalty` records with idempotency references, reason, amount, points, and resolution status.
+- Vehicle type/registration, emergency contact, and optional profile photo.
+
+The scorer updates `job_acceptance_window` together with the rider's score. A new `JobOffer` snapshots that window into `acceptance_window` and `expires_at`; changing a profile does not change the deadline on a pending offer. Riders cannot edit scores, penalties, or acceptance windows through their account API. No automatic scoring or monetary cancellation penalty has been invented.
+
+## Job lifecycle
+
+Managers create a planned session from active delivery orders belonging to one vendor. Its quoted rider cut, platform service charge, fuel addition, and optional duration/distance estimates remain visible to the rider before acceptance. Set `dispatch_enabled` or use the admin dispatch action to offer it.
+
+The dispatcher picks an online, active rider who has no accepted/running session or other pending offer, preferring higher scores and older offer times. An ignored deadline expires; a declined offer closes; the session passes to another eligible rider using that rider's own window. Exhausted candidates are revisited after five minutes. Only the addressed rider may accept, and acceptance binds the shared orders to that rider atomically.
+
+After acceptance, confirm pickup to start the run. Stops cluster coordinates to six decimal places and sort by distance from the vendor, nearest first. The map shows the pickup and numbered clusters. External Google Maps navigation provides driving directions; the overview polyline shows stop sequence, not a turn-by-turn road route.
+
+The rider submits the customer's four-digit PIN or QR payload for each order. Verification secrets are not included in the new rider responses. Delivery updates the shared order and attempt together; the last resolved order closes the session. A failed delivery retains its reason and timestamp and releases the shared order for operations to schedule a later attempt. Its original session remains valid history when a different rider accepts that later run. Confirm actual finances through the completed session's admin action after reviewing the recorded amounts; the UI distinguishes estimates from confirmed earnings.
+
+Cancellation records the rider, timestamp, reason, and stage, releases remaining orders, and creates a replacement session for another rider. Replacement amounts are estimates prorated from the original quote using remaining delivery fees (or remaining order count when fees are zero). Already delivered orders stay in their original run and cannot be verified twice. Cancelled runs retain draft quotes; any payout adjustment for a partially completed cancellation belongs to the later settlement policy.
+
+## APIs
+
+All rider endpoints require JWT authentication and `user.role == rider`; admin endpoints require platform admin access.
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| GET / PATCH | `/api/riders/profile/` | Rider profile and editable account details |
+| POST | `/api/riders/availability/` | Set `is_available` |
+| GET | `/api/riders/dashboard/?period=week` | Today/week/month/lifetime statistics, profile, earnings series, recent events |
+| GET | `/api/riders/jobs/` | Pending addressed offers and server time |
+| POST | `/api/riders/jobs/<offer>/accept/` | Accept before the deadline |
+| POST | `/api/riders/jobs/<offer>/decline/` | Decline an offer |
+| GET | `/api/riders/sessions/` | Current and past sessions |
+| GET | `/api/riders/sessions/<session>/` | Single-vendor run and ordered stop clusters |
+| POST | `/api/riders/sessions/<session>/pickup/` | Confirm the pickup |
+| POST | `/api/riders/sessions/<session>/orders/<order>/verify/` | Submit `code` and optional actual `distance_km` |
+| POST | `/api/riders/sessions/<session>/orders/<order>/failed/` | Record a delivery issue with `reason` |
+| POST | `/api/riders/sessions/<session>/cancel/` | Record a cancellation reason/details and release remaining orders |
+| GET | `/api/riders/history/cancellations/` | Up to 100 recent cancellation events |
+| GET | `/api/riders/history/penalties/` | Up to 100 recent penalties |
+| GET / POST | `/api/riders/admin/sessions/` | Inspect/create single-vendor jobs |
+| POST | `/api/riders/admin/riders/<rider>/score/` | External score, version, and acceptance-window update |
+| POST | `/api/riders/admin/riders/<rider>/penalties/` | Idempotent penalty issue |
+
+Example session creation:
+
+```json
+{
+  "vendor": 2,
+  "orders": [1048, 1049, 1050],
+  "rider_cut": "420.00",
+  "service_charge": "80.00",
+  "fuel_surge_addition": "35.00",
+  "estimated_minutes": 32,
+  "estimated_distance": "5.400",
+  "dispatch_enabled": true
+}
+```
+
+## Deployment
+
+Sync the backend source and `riders` migrations, then run `python manage.py migrate` before starting the updated application. Docker Compose includes a `rider_dispatcher` worker that waits for the web application to be healthy and processes expiration every two seconds. Start both services:
+
+```sh
+docker compose up -d --build web rider_dispatcher
+```
+
+Without Docker, run `python manage.py run_rider_dispatcher --interval 2` as a supervised worker in the same environment. `--once` performs one dispatch pass. The request paths also perform opportunistic dispatch, but the worker is required for handover while apps are closed.
+
+Legacy sessions with only one vendor in their existing order links are assigned that vendor by migration `0004`. Mixed-vendor historical sessions remain unbound for review; they are not new offer candidates. New model/API session creation rejects mixed vendors.
+
+## Android app
+
+The Android implementation is rebuilt in `C:/Users/Saranga/Documents/GameKadeRider` with Kotlin namespace `com.onemind.mealrider` and visible name **Meal Rider**. The installed application ID is retained for compatibility with the existing Android Google Maps key restriction and debug signing identity. The old source is backed up under `.design/previous-rider-app` and is excluded from app compilation.
+
+The app defaults to `https://mealdrop.shop/`, uses the new rider endpoints, and handles authentication through the shared OTP/JWT APIs. Deploy the backend before distributing the rebuilt APK.
+
+Debug-only review intents provide labelled synthetic activity without logging into or changing a server account. Review PIN `4821` and QR payload `2611024821` work only in that in-memory review repository. Production handover always calls the authenticated backend.
+
+The four tabs are Dashboard, Jobs, Sessions, and Account. Screens borrow DoorDash Dasher's hierarchy and pickup/delivery progression and inDrive's map-led offer structure, adapted to Android Material navigation, sheets, insets, larger type, and dark theme.
