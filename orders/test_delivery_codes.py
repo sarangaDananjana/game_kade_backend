@@ -10,21 +10,40 @@ from rest_framework.test import APIClient
 
 from .models import Order
 from .test_fixtures import ORDER_TIME, OrderFixtures
-from .services.delivery_codes import delivery_code_matches, delivery_code_prefix, generate_delivery_code
+from .services.delivery_codes import delivery_code_matches, delivery_code_prefix, generate_delivery_code, resolve_today_delivery_code
 
 
 class DeliveryCodeValidationTests(SimpleTestCase):
+    def test_naive_order_times_are_interpreted_in_colombo(self):
+        self.assertEqual(delivery_code_prefix(datetime(2026,11,1,22,0)), '261101')
+
+    def test_today_prefix_is_autofilled_and_yesterdays_pin_and_qr_are_rejected(self):
+        today = SimpleNamespace(delivery_code='2611020042', created_at=datetime(2026,11,1,18,30,tzinfo=datetime_timezone.utc))
+        yesterday = SimpleNamespace(delivery_code='2611010042', created_at=datetime(2026,11,1,18,29,tzinfo=datetime_timezone.utc))
+        with patch('orders.services.delivery_codes.timezone.now', return_value=datetime(2026,11,1,18,30,tzinfo=datetime_timezone.utc)):
+            self.assertEqual(resolve_today_delivery_code('0042'), '2611020042')
+            self.assertTrue(delivery_code_matches(today,'0042'))
+            self.assertTrue(delivery_code_matches(today,'2611020042'))
+            self.assertFalse(delivery_code_matches(yesterday,'0042'))
+            self.assertFalse(delivery_code_matches(yesterday,'2611010042'))
+
+    def test_prefix_does_not_accept_an_order_created_on_another_local_day(self):
+        order=SimpleNamespace(delivery_code='2611020042',created_at=ORDER_TIME)
+        with patch('orders.services.delivery_codes.timezone.now', return_value=datetime(2026,11,2,8,0,tzinfo=datetime_timezone.utc)):
+            self.assertFalse(delivery_code_matches(order,'0042'))
+
     def test_date_prefix_changes_at_sri_lankan_midnight(self):
         self.assertEqual(delivery_code_prefix(datetime(2026, 11, 1, 18, 29, 59, tzinfo=datetime_timezone.utc)), '261101')
         self.assertEqual(delivery_code_prefix(datetime(2026, 11, 1, 18, 30, tzinfo=datetime_timezone.utc)), '261102')
 
-    def test_confirmation_accepts_the_exact_qr_or_four_digits(self):
+    @patch("orders.services.delivery_codes.timezone.now", return_value=ORDER_TIME)
+    def test_confirmation_accepts_the_exact_qr_or_four_digits(self, _clock):
         legacy = uuid.uuid4()
         order = SimpleNamespace(delivery_code='2611010042', legacy_delivery_code=legacy)
-        for code in ['0042', '2611010042', str(legacy), ' 0042 ']:
+        for code in ['0042', '2611010042', ' 0042 ']:
             with self.subTest(code=code):
                 self.assertTrue(delivery_code_matches(order, code))
-        for code in [None, '', '042', 42, True, [], '2610310042', '2611010043', '４８２１', 'ආහාර', 'ABCD']:
+        for code in [str(legacy), None, '', '042', 42, True, [], '2610310042', '2611010043', '４８２１', 'ආහාර', 'ABCD']:
             with self.subTest(code=code):
                 self.assertFalse(delivery_code_matches(order, code))
 
@@ -78,6 +97,9 @@ class DeliveryCodeCreationTests(OrderFixtures):
 @override_settings(MONGO_URI=None)
 class HandoverApiTests(OrderFixtures):
     def setUp(self):
+        clock = patch("orders.services.delivery_codes.timezone.now", return_value=ORDER_TIME)
+        clock.start()
+        self.addCleanup(clock.stop)
         self.client = APIClient()
         self.order = self.make_order(delivery_code='2611010042')
         self.url = f'/api/orders/rider/orders/{self.order.pk}/'
@@ -97,8 +119,8 @@ class HandoverApiTests(OrderFixtures):
     def test_full_qr_number_completes_delivery(self):
         self.assertEqual(self.confirm('2611010042').status_code, 200)
 
-    def test_previously_issued_uuid_qr_still_completes_delivery(self):
-        self.assertEqual(self.confirm(str(self.order.legacy_delivery_code)).status_code, 200)
+    def test_uuid_qr_is_no_longer_accepted(self):
+        self.assertEqual(self.confirm(str(uuid.uuid4())).status_code, 400)
 
     def test_wrong_or_incomplete_code_does_not_change_status(self):
         for code in ['0043', '2610310042', '042', '', None, 42, '４８２１']:
@@ -130,6 +152,8 @@ class HandoverApiTests(OrderFixtures):
         self.assertEqual(response.data['qr_payload'], '2611010042')
         self.assertEqual(response.data['delivery_pin'], '0042')
         self.assertNotIn('legacy_delivery_code', response.data)
+        self.assertNotIn('unique_identity', response.data)
+        self.assertTrue(response.data['created_at'].endswith('+05:30'))
 
     def test_new_codes_are_generated_by_backend_and_cannot_be_chosen_by_customer(self):
         self.client.force_authenticate(user=self.customer)
@@ -168,11 +192,11 @@ class HandoverApiTests(OrderFixtures):
         self.assertEqual(response.data[0]['shop_name'], 'Dinner kitchen')
         self.assertEqual(response.data[0]['rank'], None)
 
-    def test_shared_rider_endpoint_still_accepts_previously_issued_uuids(self):
+    def test_shared_rider_endpoint_rejects_uuids(self):
         legacy = self.make_order()
         self.client.force_authenticate(user=self.rider)
-        response = self.client.patch(f'/api/orders/rider/orders/{legacy.pk}/', {'status': 'delivered', 'delivery_code': str(legacy.legacy_delivery_code)}, format='json')
-        self.assertEqual(response.status_code, 200)
+        response = self.client.patch(f'/api/orders/rider/orders/{legacy.pk}/', {'status': 'delivered', 'delivery_code': str(uuid.uuid4())}, format='json')
+        self.assertEqual(response.status_code, 400)
 
     @override_settings(MONGO_URI='mongodb://unused.test')
     def test_route_optimization_and_ranks_use_the_mealdrop_collection(self):

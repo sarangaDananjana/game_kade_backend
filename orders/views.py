@@ -154,7 +154,7 @@ class RiderOrderViewSet(viewsets.ModelViewSet):
         if new_status == 'delivered':
             provided_code = request.data.get('delivery_code')
             if not delivery_code_matches(order, provided_code):
-                return Response({'error': 'Invalid delivery code.'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': 'Order not found for today.'}, status=status.HTTP_400_BAD_REQUEST)
 
         order.status = new_status
         order.save(update_fields=['status'])

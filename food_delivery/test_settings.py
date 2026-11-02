@@ -32,7 +32,7 @@ TEMPLATES = [{
 }]
 AUTH_USER_MODEL = 'users.CustomUser'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Asia/Colombo'
 USE_TZ = True
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'

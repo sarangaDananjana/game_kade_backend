@@ -6,14 +6,27 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from orders.models import Order, OrderLocation
-from orders.test_fixtures import OrderFixtures
+from orders.test_fixtures import ORDER_TIME, OrderFixtures
 from users.models import CustomUser
 from .models import JobOffer, RiderInfo, Session, SessionOrder
 from .services import create_session, dispatch_due, issue_penalty
 
 
 class RiderApiTests(OrderFixtures):
+    def test_an_older_order_is_not_verified_with_the_same_four_digits_today(self):
+        session=self.accept()
+        self.client.post(f'/api/riders/sessions/{session.pk}/pickup/',{},format='json')
+        with patch('orders.services.delivery_codes.timezone.now',return_value=datetime(2026,11,2,8,0,tzinfo=datetime_timezone.utc)):
+            response=self.client.post(f'/api/riders/sessions/{session.pk}/orders/{self.order.pk}/verify/',{'code':self.order.delivery_pin},format='json')
+        self.assertEqual(response.status_code,400)
+        self.assertEqual(response.data['detail'],'Order not found for today.')
+        self.order.refresh_from_db()
+        self.assertNotEqual(self.order.status,'delivered')
+
     def setUp(self):
+        clock = patch("orders.services.delivery_codes.timezone.now", return_value=ORDER_TIME)
+        clock.start()
+        self.addCleanup(clock.stop)
         self.client = APIClient()
         for rider, score, window in [(self.rider, '95.00', 90), (self.other_rider, '75.00', 45)]:
             profile = rider.rider_info

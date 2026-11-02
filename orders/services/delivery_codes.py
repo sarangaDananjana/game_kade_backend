@@ -1,7 +1,6 @@
 """Numeric handover codes shared by customer orders and rider confirmation."""
 
 import secrets
-from datetime import timezone as datetime_timezone
 from zoneinfo import ZoneInfo
 
 from django.core.exceptions import ValidationError
@@ -15,7 +14,7 @@ DAILY_CODE_CAPACITY = 10_000
 def delivery_code_prefix(created_at=None):
     timestamp = created_at or timezone.now()
     if timezone.is_naive(timestamp):
-        timestamp = timezone.make_aware(timestamp, datetime_timezone.utc)
+        timestamp = timezone.make_aware(timestamp, DELIVERY_TIME_ZONE)
     return timestamp.astimezone(DELIVERY_TIME_ZONE).strftime('%y%m%d')
 
 
@@ -37,18 +36,22 @@ def generate_delivery_code(*, created_at=None, using='default'):
     return secrets.choice(available)
 
 
-def delivery_code_matches(order, provided_code):
+def resolve_today_delivery_code(provided_code):
     if not isinstance(provided_code, (str, int)) or isinstance(provided_code, bool):
-        return False
+        return None
     provided = str(provided_code).strip()
-    expected = str(order.delivery_code)
-    if not provided or not provided.isascii():
+    if not provided.isascii() or not provided.isdigit() or len(provided) not in [4, 10]:
+        return None
+    prefix = delivery_code_prefix()
+    candidate = prefix + provided if len(provided) == 4 else provided
+    return candidate if candidate.startswith(prefix) else None
+
+
+def delivery_code_matches(order, provided_code):
+    candidate = resolve_today_delivery_code(provided_code)
+    if candidate is None:
         return False
-    if secrets.compare_digest(expected, provided):
-        return True
-    if (len(expected) == 10 and expected.isascii() and expected.isdigit()
-            and len(provided) == 4 and provided.isascii() and provided.isdigit()):
-        return secrets.compare_digest(expected[-4:], provided)
-    # Previously issued UUID QR codes remain valid for their original order.
-    legacy = getattr(order, 'legacy_delivery_code', None)
-    return legacy is not None and secrets.compare_digest(str(legacy), provided)
+    created_at = getattr(order, 'created_at', None)
+    if created_at is not None and delivery_code_prefix(created_at) != candidate[:6]:
+        return False
+    return secrets.compare_digest(str(order.delivery_code), candidate)

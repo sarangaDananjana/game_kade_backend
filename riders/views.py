@@ -16,7 +16,7 @@ from .serializers import (CancellationSerializer, JobOfferSerializer, PenaltySer
     ProfileUpdateSerializer, RiderProfileSerializer, SessionCreateSerializer, SessionSerializer)
 from .services import (RiderActionError, accept_offer, cancel_session, create_session, decline_offer,
     dispatch_due, fail_delivery, issue_penalty, start_session, verify_delivery)
-from .timeutils import month_dates, period_bounds, rider_local_date, week_dates
+from .timeutils import RIDER_TIME_ZONE, month_dates, period_bounds, rider_local_date, week_dates
 
 
 class IsRider(permissions.BasePermission):
@@ -108,16 +108,16 @@ class DashboardView(RiderAPIView):
             'stats': summary, 'earnings_series': series,
             'active_session': SessionSerializer(active, context={'request': request}).data if active else None,
             'cancellations': CancellationSerializer(profile.cancellations.all()[:5], many=True).data,
-            'penalties': PenaltySerializer(profile.penalties.all()[:5], many=True).data, 'server_time': timezone.now()})
+            'penalties': PenaltySerializer(profile.penalties.all()[:5], many=True).data, 'server_time': timezone.localtime(timezone.now(), RIDER_TIME_ZONE)})
 
 
 class JobsView(RiderAPIView):
     def get(self, request):
         dispatch_due()
         if not profile_completion(self.profile(request))['is_complete']:
-            return Response({'offers': [], 'server_time': timezone.now(), 'profile_required': True})
+            return Response({'offers': [], 'server_time': timezone.localtime(timezone.now(), RIDER_TIME_ZONE), 'profile_required': True})
         offers = JobOffer.objects.filter(rider=request.user, status='pending', expires_at__gt=timezone.now()).select_related('session__vendor')
-        return Response({'offers': JobOfferSerializer(offers, many=True, context={'request': request}).data, 'server_time': timezone.now()})
+        return Response({'offers': JobOfferSerializer(offers, many=True, context={'request': request}).data, 'server_time': timezone.localtime(timezone.now(), RIDER_TIME_ZONE)})
 
 
 class OfferActionView(RiderAPIView):
@@ -138,7 +138,7 @@ class SessionsView(RiderAPIView):
         active = sessions.filter(status__in=['accepted', 'in_progress'])
         past = sessions.filter(status__in=['completed', 'cancelled'])[:50]
         return Response({'active': SessionSerializer(active, many=True, context={'request': request}).data,
-            'past': SessionSerializer(past, many=True, context={'request': request}).data, 'server_time': timezone.now()})
+            'past': SessionSerializer(past, many=True, context={'request': request}).data, 'server_time': timezone.localtime(timezone.now(), RIDER_TIME_ZONE)})
 
 
 class SessionDetailView(RiderAPIView):

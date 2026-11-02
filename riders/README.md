@@ -70,4 +70,4 @@ The rider services update the existing `Order.rider` and session membership in a
 
 Confirm finances after completing a run and recording the actual rider cut, platform share, fuel addition, and settlement timestamp. Rates, points rules, GPS distance collection, payment adjustments, and payouts are not assumed by the models.
 
-Apply the app migrations in the deployment environment with `python manage.py migrate`. Migration `0005` adds vehicle make/model and colour; `orders.0007` assigns stable readable order names and repairs legacy private location names. Existing orders, customers, kitchens, and delivery zones remain in place.
+Apply the app migrations in the deployment environment with `python manage.py migrate`. Migration `0005` adds vehicle make/model and colour; `orders.0007` repairs private location names and `orders.0008` removes order-name and UUID-code columns. Existing orders, customers, kitchens, and delivery zones remain in place.

@@ -99,8 +99,10 @@ Repeating the command does not duplicate history/counters. `--refresh-offer` ren
 
 ## Version 2.2 order and admin contract
 
-`Order.unique_identity` is a stable, unique, random two-word name exposed read-only to customers and riders. It carries no verification authority. Session orders return `number` without a hash, `unique_identity`, `order_value`, `delivery_fee`, and `total_amount` (which already includes the fee). PIN/QR verification secrets remain absent from rider responses.
+Orders have no two-word identity. `delivery_code` remains ten numeric digits (Colombo `YYMMDD` plus a random four-digit PIN). Customer responses expose the four-digit `delivery_pin` and numeric QR payload. Rider manual verification accepts four digits and resolves today?s prefix; an older order date or wrong PIN returns `Order not found for today.` Legacy UUID QR codes are rejected. Migration `orders.0008` removes the order-name and legacy UUID columns while retaining orders and numeric codes. Session orders return a plain `number`, `order_value`, `delivery_fee`, and `total_amount` (which already includes the fee).
 
-Stops group by saved location ID, carry `is_system_defined` and `unique_identity`, and return the system name for public locations or two-word identity for private locations. Description remains available. Migration `orders.0007` names existing orders and repairs malformed private location identities.
+Stops group by saved location ID, carry `is_system_defined` and `unique_identity`, and return the system name for public locations or two-word identity for private locations. Description remains available. Migration `orders.0007` repairs malformed private location identities; `0008` removes the previously added order-name field.
 
 The Django admin session list has rider/status/finance controls and a Save action per row. Assignment synchronizes queued orders, pickup supplies start timestamps/order status, cancellation releases/reassigns remaining work, completion requires resolved attempts, and financial confirmation requires a completed session. Confirmed facts stay locked.
+
+The production database connection, API formatting, and admin timezone use `Asia/Colombo` (+05:30). Existing recorded instants are preserved. Slide gestures guard acceptance, pickup, and travel starts in the Android application.

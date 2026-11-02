@@ -26,7 +26,7 @@ class OrderAdmin(admin.ModelAdmin):
     list_display = ('id', 'vendor', 'user', 'rider', 'status', 'total_amount', 'delivery_fee', 'created_at')
     list_filter = ('vendor', 'status', 'created_at')
     search_fields = ('user__phone_number', 'user__name', 'vendor__shop_name', 'delivery_code')
-    readonly_fields = ('unique_identity', 'delivery_code', 'legacy_delivery_code', 'created_at')
+    readonly_fields = ('delivery_code', 'created_at')
     inlines = [OrderItemInline]
     # Quickly change order status from the list view
     list_editable = ('status',)

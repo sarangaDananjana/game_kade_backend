@@ -1,4 +1,3 @@
-import uuid
 from decimal import Decimal
 
 from django.conf import settings
@@ -10,7 +9,7 @@ from django.utils import timezone
 
 from core.locations import SpatialLocationMixin
 from .services.delivery_codes import generate_delivery_code
-from .services.identities import generate_order_identity
+from .services.identities import generate_location_identity
 
 
 DISTRICT_CHOICES = [('Matara', 'Matara')]
@@ -65,7 +64,7 @@ class OrderLocation(SpatialLocationMixin, models.Model):
         if not self.is_system_defined and len((self.unique_identity or '').split()) != 2:
             using = kwargs.get('using') or self._state.db or 'default'
             for _ in range(100):
-                identity = generate_order_identity()
+                identity = generate_location_identity()
                 if not type(self).objects.using(using).filter(unique_identity=identity).exclude(pk=self.pk).exists():
                     self.unique_identity = identity
                     if kwargs.get('update_fields') is not None:
@@ -98,10 +97,7 @@ class Order(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
     delivery_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    legacy_delivery_code = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     delivery_code = models.CharField(max_length=10, editable=False, unique=True)
-    unique_identity = models.CharField(max_length=100, unique=True, editable=False, default=generate_order_identity,
-        help_text='A two-word order name. This is not a delivery verification code.')
     created_at = models.DateTimeField(default=timezone.now, editable=False)
 
     class Meta:
@@ -115,24 +111,17 @@ class Order(models.Model):
         return self.delivery_code[-4:]
 
     def save(self, *args, **kwargs):
-        if not self._state.adding:
+        if not self._state.adding or self.delivery_code:
             return super().save(*args, **kwargs)
         using = kwargs.get('using') or router.db_for_write(type(self), instance=self)
         for _ in range(32):
-            if not self.delivery_code:
-                self.delivery_code = generate_delivery_code(created_at=self.created_at, using=using)
+            self.delivery_code = generate_delivery_code(created_at=self.created_at, using=using)
             try:
                 with transaction.atomic(using=using):
                     return super().save(*args, **kwargs)
             except IntegrityError:
-                identity_collision = type(self).objects.using(using).filter(unique_identity=self.unique_identity).exists()
-                code_collision = type(self).objects.using(using).filter(delivery_code=self.delivery_code).exists()
-                if not identity_collision and not code_collision:
+                if not type(self).objects.using(using).filter(delivery_code=self.delivery_code).exists():
                     raise
-                if identity_collision:
-                    self.unique_identity = generate_order_identity()
-                if code_collision:
-                    self.delivery_code = ''
         self.delivery_code = ''
         raise ValidationError('Could not allocate a delivery code. Please try placing the order again.')
 

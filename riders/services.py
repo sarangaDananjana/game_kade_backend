@@ -114,7 +114,7 @@ def create_session(vendor_id, order_ids, *, rider_cut=Decimal('0.00'), service_c
     Order.objects.filter(pk__in=ids).update(rider=None)
     for order in orders:
         order.rider_id = None
-        SessionOrder.objects.create(session=session, order=order)
+        SessionOrder.objects.create(session=session, order=order, assigned_at=timezone.now())
     if offer_to_rider is not None:
         profile = RiderInfo.objects.select_for_update(of=('self',)).select_related('user').filter(
             user_id=offer_to_rider, user__role='rider', user__is_active=True).first()
@@ -212,7 +212,7 @@ def verify_delivery(rider, session_id, order_id, code, *, distance_km=None):
     if link.status != SessionOrder.Status.QUEUED or order.status in ['delivered', 'cancelled']:
         raise RiderActionError('This delivery has already been resolved.', 'order_already_resolved')
     if not delivery_code_matches(order, code):
-        raise RiderActionError('That PIN or QR code does not match this order. Ask the customer to check it.', 'invalid_delivery_code', 400)
+        raise RiderActionError('Order not found for today.', 'order_not_found_today', 400)
     now = timezone.now()
     order.status = 'delivered'
     order.save(update_fields=['status'])

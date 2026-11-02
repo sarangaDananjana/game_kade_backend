@@ -24,7 +24,6 @@ def session_stops(session):
                 'description': location.description or '', 'landmark': location.unique_identity, 'orders': []}
         # Verification secrets are deliberately absent from rider responses.
         grouped[key]['orders'].append({'id': order.pk, 'number': str(order.pk), 'attempt_id': link.pk,
-            'unique_identity': order.unique_identity,
             'status': link.status, 'customer_name': order.user.name or 'Customer', 'customer_phone': order.user.phone_number,
             'total_amount': str(order.total_amount), 'delivery_fee': str(order.delivery_fee),
             'order_value': str(order.total_amount - order.delivery_fee),

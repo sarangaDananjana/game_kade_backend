@@ -7,7 +7,7 @@ from rest_framework.test import APIClient
 
 from orders.models import Order, OrderLocation
 from orders.services.assignment import AssignmentError, assign_orders
-from orders.test_fixtures import OrderFixtures
+from orders.test_fixtures import ORDER_TIME, OrderFixtures
 from .admin_services import update_session_from_admin
 from .models import RiderInfo, Session
 from .profile import profile_completion
@@ -17,6 +17,9 @@ from .services import RiderActionError, create_session, verify_delivery
 
 class RiderImprovementsTests(OrderFixtures):
     def setUp(self):
+        clock = patch("orders.services.delivery_codes.timezone.now", return_value=ORDER_TIME)
+        clock.start()
+        self.addCleanup(clock.stop)
         self.order = self.make_order(rider=None)
         self.client = APIClient()
         self.client.force_authenticate(self.rider)
@@ -75,18 +78,17 @@ class RiderImprovementsTests(OrderFixtures):
         self.assertEqual(len(shared['orders']), 2)
         payload = stops[0]['orders'][0]
         self.assertFalse(payload['number'].startswith('#'))
-        self.assertEqual(len(payload['unique_identity'].split()), 2)
+        self.assertNotIn('unique_identity', payload)
         self.assertEqual(Decimal(payload['order_value']) + Decimal(payload['delivery_fee']), Decimal(payload['total_amount']))
         self.assertNotIn('delivery_code', payload)
         self.assertNotIn('delivery_pin', payload)
 
-    def test_order_name_survives_changes_and_name_collisions_retry(self):
-        identity = self.order.unique_identity
-        self.order.status = 'pending'
-        self.order.save(update_fields=['status'])
-        self.assertEqual(Order.objects.get(pk=self.order.pk).unique_identity, identity)
-        other = self.make_order(unique_identity=identity)
-        self.assertNotEqual(other.unique_identity, identity)
+    def test_orders_have_only_numeric_delivery_codes_and_locations_have_names(self):
+        fields = {field.name for field in Order._meta.fields}
+        self.assertNotIn('unique_identity', fields)
+        self.assertNotIn('legacy_delivery_code', fields)
+        self.assertEqual(len(self.order.delivery_code), 10)
+        self.assertEqual(len(self.location.unique_identity.split()), 2)
 
     def test_admin_assignment_pickup_and_finances_keep_orders_in_sync(self):
         session = create_session(self.vendor.pk, [self.order.pk])
@@ -131,3 +133,13 @@ class RiderImprovementsTests(OrderFixtures):
         self.assertEqual(response.status_code, 302)
         session.refresh_from_db()
         self.assertEqual(session.status, 'accepted')
+
+    def test_cancelling_a_planned_session_withdraws_offers_and_releases_orders(self):
+        session = create_session(self.vendor.pk, [self.order.pk], offer_to_rider=self.rider.pk)
+        session = update_session_from_admin(session.pk, rider_id=None, status='cancelled', finance_status='draft')
+        self.assertEqual(session.session_orders.get().status, 'removed')
+        self.assertFalse(session.job_offers.filter(status='pending').exists())
+        self.assertEqual(session.status, 'cancelled')
+        self.order.refresh_from_db()
+        self.assertIsNone(self.order.rider_id)
+        self.assertEqual(self.order.status, 'preparing')

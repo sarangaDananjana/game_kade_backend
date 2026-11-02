@@ -58,7 +58,7 @@ def update_session_from_admin(session_id, *, rider_id, status, finance_status):
                 for link in links:
                     link.status, link.finished_at = 'removed', now
                     link.save(update_fields=['status', 'finished_at'])
-                Order.objects.filter(pk__in=[link.order_reference for link in links]).exclude(status__in=['delivered', 'cancelled']).update(rider=None)
+                Order.objects.filter(pk__in=[link.order_reference for link in links]).exclude(status__in=['delivered', 'cancelled']).update(rider=None, status='preparing')
                 session.status, session.finished_at, session.dispatch_enabled = status, now, False
                 session.job_offers.filter(status='pending').update(status='withdrawn', responded_at=now)
                 session.save()

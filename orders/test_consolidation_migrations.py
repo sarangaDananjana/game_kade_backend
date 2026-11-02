@@ -131,7 +131,7 @@ class ConsolidationMigrationTests(TransactionTestCase):
         self.assertEqual(order.created_at, ORDER_TIME)
         self.assertEqual(order.status, 'preparing')
         self.assertEqual(order.delivery_code, '2611010042')
-        self.assertEqual(order.legacy_delivery_code, self.current_order.legacy_delivery_code)
+        self.assertFalse(hasattr(order, "legacy_delivery_code"))
         self.assertEqual(OrderItem.objects.count(), 1)
         self.assertEqual(OrderItem.objects.get(pk=1).product_id, 1)
         self.assertEqual(OrderItem.objects.get(pk=1).price_at_purchase, Decimal('320.00'))
