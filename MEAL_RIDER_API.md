@@ -106,3 +106,7 @@ Stops group by saved location ID, carry `is_system_defined` and `unique_identity
 The Django admin session list has rider/status/finance controls and a Save action per row. Assignment synchronizes queued orders, pickup supplies start timestamps/order status, cancellation releases/reassigns remaining work, completion requires resolved attempts, and financial confirmation requires a completed session. Confirmed facts stay locked.
 
 The production database connection, API formatting, and admin timezone use `Asia/Colombo` (+05:30). Existing recorded instants are preserved. Slide gestures guard acceptance, pickup, and travel starts in the Android application.
+
+## Login OTP 2.2.2
+
+`OTP_SMS_BYPASS_NUMBERS` configures 0721992125 and 0774610536. These accounts generate/save a normal code and return `delivery_method=admin`, `otp_length=6`, without calling Text.lk. Codes remain private to the backend admin. Account roles are preserved. Normal numbers retain SMS. Public send/verify endpoints ignore stale JWTs and normalize Sri Lankan phone formats. No schema change is needed.
