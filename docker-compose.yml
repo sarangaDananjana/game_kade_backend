@@ -1,19 +1,45 @@
-version: '3.8'
+x-backend-environment: &backend-environment
+  RATE_LIMIT_REDIS_URL: ${RATE_LIMIT_REDIS_URL:-redis://rate_limit_cache:6379/0}
+  # Nginx on the host reaches the container through this bridge gateway.
+  TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-127.0.0.1/32,::1/128,172.30.0.1/32}
 
 services:
+  rate_limit_cache:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "yes", "--maxmemory", "64mb", "--maxmemory-policy", "noeviction"]
+    restart: always
+    # No published port: only the backend network can access Redis.
+    networks:
+      - backend
+    volumes:
+      - rate_limit_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    mem_limit: 128m
+    cpus: 0.5
+
   web:
     build: .
     # Pass the production environment file
     env_file:
       - .env.prod
+    environment: *backend-environment
     ports:
       - "127.0.0.1:8002:8000"
+    networks:
+      - backend
     dns:
       - 8.8.8.8
       - 8.8.4.4
     # This command collects static files, runs migrations, and then starts gunicorn
-    command: sh -c "python manage.py collectstatic --noinput && python manage.py migrate && gunicorn food_delivery.wsgi:application --bind 0.0.0.0:8000"
+    command: sh -c "python manage.py collectstatic --noinput && python manage.py migrate && gunicorn food_delivery.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 30 --graceful-timeout 30 --keep-alive 5 --max-requests 1000 --max-requests-jitter 100 --limit-request-line 4094 --limit-request-fields 50 --limit-request-field_size 8190"
     restart: always
+    depends_on:
+      rate_limit_cache:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8000), 5).close()"]
       interval: 10s
@@ -23,12 +49,29 @@ services:
     volumes:
       - ./media:/app/media
       - ./staticfiles:/app/staticfiles
+    mem_limit: 1g
+    cpus: 2.0
   rider_dispatcher:
     build: .
     env_file:
       - .env.prod
+    environment: *backend-environment
+    networks:
+      - backend
     command: python manage.py run_rider_dispatcher --interval 2
     restart: always
     depends_on:
       web:
         condition: service_healthy
+    mem_limit: 512m
+    cpus: 1.0
+
+networks:
+  backend:
+    ipam:
+      config:
+        - subnet: ${MEALDROP_NETWORK_SUBNET:-172.30.0.0/24}
+          gateway: ${MEALDROP_NETWORK_GATEWAY:-172.30.0.1}
+
+volumes:
+  rate_limit_data:

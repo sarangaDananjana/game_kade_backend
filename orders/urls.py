@@ -5,8 +5,10 @@ from .views import (
     OptimizeRouteAPIView, GetOptimizedRouteAPIView, RiderOrdersWithRankAPIView
 )
 from .delivery_quotes import BasketDeliveryQuoteView
+from .ordering_window import OrderingWindowView
 
 urlpatterns = [
+    path('ordering-window/', OrderingWindowView.as_view(), name='ordering-window'),
     path('create/', OrderViewSet.as_view({'post': 'create'}), name='order-create'),
     path('delivery-quote/', BasketDeliveryQuoteView.as_view(), name='basket-delivery-quote'),
     # Route Optimization Endpoints

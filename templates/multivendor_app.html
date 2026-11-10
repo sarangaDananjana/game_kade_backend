@@ -435,7 +435,7 @@
         <!-- Closed View -->
         <div id="closedView" class="view card" style="text-align: center; max-width: 500px; margin: 80px auto; padding: 40px;">
             <h2 style="font-size: 2.5rem; margin-bottom: 10px;">We're Closed 🌙</h2>
-            <p style="color: var(--mid-grey); font-size: 1.1rem; margin-bottom: 30px;">Our vendors are currently resting. We accept new orders daily between <strong>12:00 PM and 5:00 PM</strong>.</p>
+            <p id="closedMessage" style="color: var(--mid-grey); font-size: 1.1rem; margin-bottom: 30px;">Ordering is closed right now. Please try again later.</p>
             <button class="btn" onclick="showView('ordersView')">View Past Orders</button>
         </div>
     </div>
@@ -473,36 +473,38 @@
         let cart = [];
         let isClosed = false;
 
-        function updateTimeRestriction() {
-            const now = new Date();
-            const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
-            const slTime = new Date(utcTime + (3600000 * 5.5)); // UTC+5:30
-            const hours = slTime.getHours();
-            
+        async function updateTimeRestriction() {
             const banner = document.getElementById('timeBanner');
-            
-            if (hours >= 12 && hours < 17) {
-                isClosed = false;
-                const remainingHours = 16 - hours;
-                const remainingMinutes = 59 - slTime.getMinutes();
-                const remainingSeconds = 59 - slTime.getSeconds();
-                banner.style.display = 'block';
-                banner.style.background = 'var(--forest-light)';
-                banner.innerText = `Ordering is open! Closes in ${remainingHours}h ${remainingMinutes}m ${remainingSeconds}s`;
-            } else {
-                isClosed = true;
-                banner.style.display = 'block';
-                banner.style.background = 'var(--terracotta)';
-                banner.innerText = 'We are currently closed for new orders (Open 12:00 PM - 5:00 PM).';
-                
-                const activeView = document.querySelector('.view.active');
-                if (activeView && (activeView.id === 'vendorsView' || activeView.id === 'vendorDetailView')) {
-                    showView('closedView');
+            try {
+                const response = await fetch('/api/orders/ordering-window/', { cache: 'no-store' });
+                if (!response.ok) throw new Error('Ordering hours unavailable');
+                const window = await response.json();
+                if (typeof window.is_open !== 'boolean' || typeof window.message !== 'string') {
+                    throw new Error('Ordering hours unavailable');
                 }
+                isClosed = !window.is_open;
+                banner.style.display = 'block';
+                banner.style.background = isClosed ? 'var(--terracotta)' : 'var(--forest-light)';
+                banner.innerText = window.message;
+                document.getElementById('closedMessage').innerText = window.message;
+                const activeView = document.querySelector('.view.active');
+                if (isClosed && activeView && (activeView.id === 'vendorsView' || activeView.id === 'vendorDetailView')) {
+                    showView('closedView');
+                } else if (!isClosed && activeView?.id === 'closedView' && accessToken) {
+                    showView('vendorsView');
+                }
+            } catch (error) {
+                // The checkout API enforces the current schedule independently.
+                isClosed = false;
+                banner.style.display = 'block';
+                banner.innerText = 'Current ordering hours will be checked at checkout.';
             }
         }
 
-        setInterval(updateTimeRestriction, 1000);
+        setInterval(updateTimeRestriction, 60000);
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) updateTimeRestriction();
+        });
         updateTimeRestriction();
 
         // View Navigation
@@ -820,11 +822,6 @@
 
         // --- CHECKOUT ---
         async function checkout() {
-            if (isClosed) {
-                alert("We are currently closed. Orders are only accepted from 12:00 PM to 5:00 PM.");
-                return;
-            }
-
             if (cart.length === 0) {
                 alert("Your cart is empty!");
                 return;
@@ -856,7 +853,7 @@
                     showView('vendorsView');
                 } else {
                     const errData = await res.json();
-                    alert("Failed to place order: " + JSON.stringify(errData));
+                    alert(errData.detail || ("Failed to place order: " + JSON.stringify(errData)));
                 }
             } catch (e) {
                 alert("Error placing order: " + e.message);

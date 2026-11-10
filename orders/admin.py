@@ -2,7 +2,20 @@ from django.contrib.gis import admin
 from django.urls import path
 from django.core.serializers import serialize
 from django.template.response import TemplateResponse
-from .models import OrderLocation, Order, OrderItem, DeliveryZone, DeliveryDistanceTier
+from .models import OrderLocation, Order, OrderItem, DeliveryZone, DeliveryDistanceTier, OrderingWindow
+
+
+@admin.register(OrderingWindow)
+class OrderingWindowAdmin(admin.ModelAdmin):
+    list_display = ('__str__', 'enabled', 'opens_at', 'closes_at')
+    fields = ('enabled', 'opens_at', 'closes_at')
+    save_as = False
+
+    def has_add_permission(self, request):
+        return super().has_add_permission(request) and not OrderingWindow.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(OrderLocation)

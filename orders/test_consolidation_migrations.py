@@ -143,7 +143,7 @@ class ConsolidationMigrationTests(TransactionTestCase):
         self.assertEqual(tier.minimum_delivery_charge_per_parcel, Decimal('10.00'))
         self.assertEqual(list(apps.get_app_config('multivender').get_models()), [])
         self.assertEqual({model.__name__ for model in apps.get_app_config('orders').get_models()},
-                         {'Order', 'OrderItem', 'OrderLocation', 'DeliveryZone', 'DeliveryDistanceTier'})
+                         {'Order', 'OrderItem', 'OrderLocation', 'DeliveryZone', 'DeliveryDistanceTier', 'OrderingWindow'})
         self.assertFalse(any(name.startswith('multivender_') for name in connection.introspection.table_names()))
         from users.models import CustomUser
         from django.contrib.admin.models import LogEntry

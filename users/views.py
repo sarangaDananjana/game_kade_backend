@@ -5,71 +5,68 @@ from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from .models import CustomUser, OTP, AppVersion
-from .utils import generate_otp_code, send_otp_sms, normalize_mobile_number, find_user_by_mobile
+from .utils import generate_otp_code, send_otp_sms, find_user_by_mobile
+from .serializers import SendOTPInput, VerifyOTPInput, ProfileInput
 from django.conf import settings
+from django.db import transaction
+from django.contrib.auth.hashers import make_password
+from django.utils.crypto import constant_time_compare
+from rest_framework_simplejwt.views import TokenRefreshView
+from core.throttling import enforce_limits
 
 
 class SendOTPView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
+    rate_limit_scope = 'otp_send_ip'
+    rate_limit_global_scope = 'otp_send_global'
 
     def post(self, request):
-        phone_number = request.data.get('phone_number')
-        name = request.data.get('name')
-        # NEW: Extract the role from the request, default to 'customer' if missing
-        role = request.data.get('role', 'customer')
-
-        # Security check: Ensure they don't try to pass 'admin' or something invalid
-        if role not in ['customer', 'rider']:
-            role = 'customer'
-
-        if not phone_number:
-            return Response({'error': 'Phone number is required.'}, status=status.HTTP_400_BAD_REQUEST)
-        try:
-            phone_number = normalize_mobile_number(phone_number)
-        except ValueError as error:
-            return Response({'error': str(error)}, status=status.HTTP_400_BAD_REQUEST)
+        payload = SendOTPInput(data=request.data)
+        payload.is_valid(raise_exception=True)
+        phone_number = payload.validated_data['phone_number']
+        name = payload.validated_data.get('name')
+        role = payload.validated_data['role']
 
         # Check if the user exists
         user = find_user_by_mobile(phone_number)
 
+        if not user and not name:
+            CustomUser.objects.get_or_create(phone_number=phone_number, defaults={'role': role, 'password': make_password(None)})
+            return Response({
+                'is_new_user': True,
+                'message': 'User created. Please provide your name to receive OTP.'
+            }, status=status.HTTP_201_CREATED)
+        if user and not user.is_active:
+            return Response({'error': 'Unable to send a login code.'}, status=status.HTTP_400_BAD_REQUEST)
+        if user and not user.name and not name:
+            return Response({
+                'is_new_user': True,
+                'message': 'Please provide your name to receive OTP.'
+            }, status=status.HTTP_200_OK)
+
+        # Apply the resend budget only when issuing a code, so the two-step
+        # name-entry flow can finish without waiting through an SMS cooldown.
+        enforce_limits([('otp_send_phone', phone_number)])
         if not user:
-            # NEW USER FLOW
-            if not name:
-                # Create the user in the database, assigning the requested role
-                CustomUser.objects.create(phone_number=phone_number, role=role)
-                return Response({
-                    'is_new_user': True,
-                    'message': 'User created. Please provide your name to receive OTP.'
-                }, status=status.HTTP_201_CREATED)
-            else:
-                # If they somehow passed the name on the first try, create them completely
-                user = CustomUser.objects.create(
-                    phone_number=phone_number, name=name, role=role)
-        else:
-            # EXISTING USER FLOW
-            if not user.name and not name:
-                # Edge case: User was created but dropped off before entering name
-                return Response({
-                    'is_new_user': True,
-                    'message': 'Please provide your name to receive OTP.'
-                }, status=status.HTTP_200_OK)
-            elif name and not user.name:
-                # Update user with the provided name
+            user, _ = CustomUser.objects.get_or_create(
+                phone_number=phone_number, defaults={'name': name, 'role': role, 'password': make_password(None)},
+            )
+        otp_code = generate_otp_code()
+        with transaction.atomic():
+            user = CustomUser.objects.select_for_update().get(pk=user.pk)
+            if not user.is_active:
+                return Response({'error': 'Unable to send a login code.'}, status=status.HTTP_400_BAD_REQUEST)
+            if name and not user.name:
                 user.name = name
-                user.save()
-
-        # Generate OTP (Modified for test number bypass)
-        if phone_number == "0700000000":
-            otp_code = "00000"
-        else:
-            otp_code = generate_otp_code()
-
-        # Save OTP to database
-        OTP.objects.create(user=user, otp_code=otp_code)
+                user.save(update_fields=['name'])
+            # A resend invalidates every previous code. The user lock also
+            # serializes issuance with verification across workers.
+            OTP.objects.filter(user=user, is_used=False).update(is_used=True)
+            otp = OTP.objects.create(user=user, otp_code=otp_code)
 
         # Send SMS via the provided API
-        bypass_sms = phone_number == '0700000000' or phone_number in getattr(settings, 'OTP_SMS_BYPASS_NUMBERS', {'0721992125', '0774610536'})
+        bypass_sms = phone_number in getattr(settings, 'OTP_SMS_BYPASS_NUMBERS', set())
         if bypass_sms:
             # Bypass actual SMS sending for the test account to save credits
             sms_sent = True
@@ -84,49 +81,41 @@ class SendOTPView(APIView):
                 'otp_length': len(otp_code),
             }, status=status.HTTP_200_OK)
         else:
+            OTP.objects.filter(pk=otp.pk).update(is_used=True)
             return Response({'error': 'Failed to send OTP via SMS.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class VerifyOTPView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
+    rate_limit_scope = 'otp_verify_ip'
 
     def post(self, request):
-        phone_number = request.data.get('phone_number')
-        otp_code = request.data.get('otp_code')
-
-        if not phone_number or not otp_code:
-            return Response({'error': 'Phone number and OTP code are required.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            phone_number = normalize_mobile_number(phone_number)
-        except ValueError as error:
-            return Response({'error': str(error)}, status=status.HTTP_400_BAD_REQUEST)
+        payload = VerifyOTPInput(data=request.data)
+        payload.is_valid(raise_exception=True)
+        phone_number = payload.validated_data['phone_number']
+        otp_code = payload.validated_data['otp_code']
+        enforce_limits([('otp_verify_phone', phone_number)])
         user = find_user_by_mobile(phone_number)
         if user is None:
-            return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': 'Invalid or expired OTP.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Find the latest unused OTP for this user
-        latest_otp = OTP.objects.filter(
-            user=user, is_used=False).order_by('-created_at').first()
-
-        if not latest_otp or latest_otp.otp_code != str(otp_code):
-            return Response({'error': 'Invalid OTP.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if not latest_otp.is_valid():
-            return Response({'error': 'OTP has expired.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Mark OTP as used
-        latest_otp.is_used = True
-        latest_otp.save()
-
-        # Ensure user is active
-        if not user.is_active:
-            user.is_active = True
-            user.save()
-
-        # Generate JWT Tokens
-        refresh = RefreshToken.for_user(user)
+        with transaction.atomic():
+            user = CustomUser.objects.select_for_update().get(pk=user.pk)
+            # Always inspect the latest code, including used/locked codes;
+            # never fall back to an older unused login code.
+            latest_otp = OTP.objects.select_for_update().filter(user=user).order_by('-created_at', '-pk').first()
+            if not user.is_active or not latest_otp or not latest_otp.is_valid():
+                return Response({'error': 'Invalid or expired OTP.'}, status=status.HTTP_400_BAD_REQUEST)
+            if not constant_time_compare(latest_otp.otp_code, otp_code):
+                latest_otp.failed_attempts += 1
+                if latest_otp.failed_attempts >= settings.OTP_MAX_FAILED_ATTEMPTS:
+                    latest_otp.is_used = True
+                latest_otp.save(update_fields=['failed_attempts', 'is_used'])
+                return Response({'error': 'Invalid or expired OTP.'}, status=status.HTTP_400_BAD_REQUEST)
+            latest_otp.is_used = True
+            latest_otp.save(update_fields=['is_used'])
+            refresh = RefreshToken.for_user(user)
 
         return Response({
             'message': 'Login successful.',
@@ -135,6 +124,10 @@ class VerifyOTPView(APIView):
             'role': user.role,
             'name': user.name
         }, status=status.HTTP_200_OK)
+
+
+class RateLimitedTokenRefreshView(TokenRefreshView):
+    rate_limit_scope = 'token_refresh_ip'
 
 
 class DeleteAccountView(APIView):
@@ -186,8 +179,10 @@ class ProfileView(APIView):
 
     def put(self, request):
         user = request.user
-        user.name = request.data.get('name', user.name)
-        user.save()
+        payload = ProfileInput(data=request.data)
+        payload.is_valid(raise_exception=True)
+        user.name = payload.validated_data.get('name', user.name)
+        user.save(update_fields=['name'])
         return Response({
             'name': user.name or "",
             'phone': user.phone_number,

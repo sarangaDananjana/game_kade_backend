@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
 from django.utils import timezone
+from django.conf import settings
 
 
 class CustomUserManager(BaseUserManager):
@@ -68,11 +69,13 @@ class OTP(models.Model):
     otp_code = models.CharField(max_length=6)
     created_at = models.DateTimeField(auto_now_add=True)
     is_used = models.BooleanField(default=False)
+    failed_attempts = models.PositiveSmallIntegerField(default=0)
 
     def is_valid(self):
         # OTP expires after 5 minutes
         expiration_time = self.created_at + timezone.timedelta(minutes=5)
-        return timezone.now() <= expiration_time and not self.is_used
+        return (timezone.now() <= expiration_time and not self.is_used and
+                self.failed_attempts < getattr(settings, 'OTP_MAX_FAILED_ATTEMPTS', 5))
 
 
 class AppVersion(models.Model):

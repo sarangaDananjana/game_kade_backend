@@ -1,6 +1,6 @@
 import requests
-import random
-import os  # <-- Add this
+import secrets
+import os
 import re
 import logging
 from django.conf import settings
@@ -36,8 +36,8 @@ def find_user_by_mobile(phone):
 
 
 def generate_otp_code():
-    """Generates a 6-digit random OTP"""
-    return str(random.randint(100000, 999999))
+    """Generate an unpredictable six-digit login code."""
+    return str(secrets.randbelow(900000) + 100000)
 
 
 def send_otp_sms(phone, otp_code):
@@ -46,7 +46,7 @@ def send_otp_sms(phone, otp_code):
         phone = normalize_mobile_number(phone)
     except ValueError:
         return False
-    if phone in getattr(settings, 'OTP_SMS_BYPASS_NUMBERS', {'0721992125', '0774610536'}) or phone == '0700000000':
+    if phone in getattr(settings, 'OTP_SMS_BYPASS_NUMBERS', set()):
         return True
     message = f"Your Meal Drop OTP code is: {otp_code}. It will expire in 5 minutes."
     api_key = os.environ.get("TEXT_LK_API_KEY")
@@ -58,7 +58,6 @@ def send_otp_sms(phone, otp_code):
         response = requests.post(
             "https://app.text.lk/api/v3/sms/send",
             headers={
-                # Note: In production, move this Bearer token to .env
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
                 "Accept": "application/json"
@@ -69,7 +68,8 @@ def send_otp_sms(phone, otp_code):
                 "type": "plain",
                 "message": message
             },
-            timeout=5
+            timeout=5,
+            allow_redirects=False,
         )
         if not 200 <= response.status_code < 300:
             logger.warning('SMS provider returned HTTP %s.', response.status_code)

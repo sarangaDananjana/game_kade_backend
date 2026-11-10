@@ -43,6 +43,7 @@ class BasketQuoteInput(serializers.Serializer):
 class BasketDeliveryQuoteView(APIView):
     # Anonymous coordinate quotes support browsing; saved addresses remain private.
     permission_classes = [permissions.AllowAny]
+    rate_limit_scope = 'delivery_quote'
 
     def post(self, request):
         payload = BasketQuoteInput(data=request.data)

@@ -15,6 +15,8 @@ import os
 from datetime import timedelta
 import dj_database_url
 from dotenv import load_dotenv
+from django.core.exceptions import ImproperlyConfigured
+from core.security import env_bool, env_list, security_settings, signing_key
 
 
 # Load environment variables from .env file and .env.prod
@@ -28,16 +30,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-&%-=qsm9k7e0+2@0lnz(#nw31v2gl_v2lt^k-642_25d^l7fk@'
+DEBUG = env_bool(os.environ, 'DEBUG', False)
+SECRET_KEY = signing_key(os.environ, debug=DEBUG)
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+ALLOWED_HOSTS = env_list(os.environ, 'ALLOWED_HOSTS', 'mealdrop.shop,www.mealdrop.shop,47.236.50.0')
+if not ALLOWED_HOSTS or (not DEBUG and '*' in ALLOWED_HOSTS):
+    raise ImproperlyConfigured('ALLOWED_HOSTS must explicitly list the backend hostnames.')
 
-ALLOWED_HOSTS = ['47.236.50.0', 'mealdrop.shop', 'www.mealdrop.shop']
+globals().update(security_settings(os.environ, debug=DEBUG))
 
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-CSRF_TRUSTED_ORIGINS = ['https://mealdrop.shop', 'https://www.mealdrop.shop']
+CSRF_TRUSTED_ORIGINS = env_list(os.environ, 'CSRF_TRUSTED_ORIGINS', 'https://mealdrop.shop,https://www.mealdrop.shop')
 
 
 # Application definition
@@ -52,6 +55,7 @@ INSTALLED_APPS = [
     # Third party apps
     'rest_framework',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'django.contrib.gis',
 
     # Local apps
@@ -67,7 +71,9 @@ AUTH_USER_MODEL = 'users.CustomUser'
 
 
 MIDDLEWARE = [
+    'core.middleware.TrustedProxyMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'core.middleware.RequestGuardMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',  # <-- ADDED FOR STATIC FILES
     'django.middleware.common.CommonMiddleware',
@@ -137,9 +143,6 @@ LANGUAGE_CODE = 'en-us'
 
 TIME_ZONE = 'Asia/Colombo'
 
-# These test accounts keep their generated OTP in admin without sending an SMS.
-OTP_SMS_BYPASS_NUMBERS = {'0721992125', '0774610536'}
-
 USE_I18N = True
 
 USE_TZ = True
@@ -160,7 +163,11 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
-    )
+    ),
+    'DEFAULT_PERMISSION_CLASSES': ('rest_framework.permissions.IsAuthenticated',),
+    'DEFAULT_THROTTLE_CLASSES': ('core.throttling.APIRateLimitThrottle',),
+    'EXCEPTION_HANDLER': 'core.throttling.api_exception_handler',
+    'NUM_PROXIES': 0,
 }
 
 SIMPLE_JWT = {

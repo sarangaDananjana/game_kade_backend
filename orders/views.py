@@ -13,8 +13,7 @@ from .serializers import (
     DeliveryZoneCreateSerializer, DeliveryZoneSerializer, OrderLocationSerializer,
     OrderSerializer, RiderOrderSerializer,
 )
-from rest_framework.exceptions import ValidationError
-from zoneinfo import ZoneInfo
+from .ordering_window import ensure_ordering_open
 from django.contrib.auth.mixins import UserPassesTestMixin
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -49,10 +48,12 @@ class OrderLocationViewSet(viewsets.ModelViewSet):
 
 
 class CheckoutHoursMixin:
+    @property
+    def rate_limit_scope(self):
+        return 'checkout' if self.request.method == 'POST' else None
+
     def perform_create(self, serializer):
-        local_time = timezone.now().astimezone(ZoneInfo('Asia/Colombo'))
-        if not (12 <= local_time.hour < 17):
-            raise ValidationError('We are currently closed. Orders are only accepted between 12:00 PM and 5:00 PM.')
+        ensure_ordering_open()
         serializer.save(user=self.request.user)
 
 
@@ -348,16 +349,24 @@ class RiderOrdersWithRankAPIView(APIView):
 
 class OptimizeRouteAPIView(APIView):
     permission_classes = [IsRiderPermission]
+    rate_limit_scope = 'route_optimize'
     order_model = Order
     route_collection = None
 
     def post(self, request, *args, **kwargs):
         # 1. Get rider's current lat/lng from request body
-        lat = request.data.get('lat')
-        lng = request.data.get('lng')
+        from rest_framework import serializers
+        from math import isfinite
 
-        if not lat or not lng:
-            return Response({'error': 'Latitude (lat) and Longitude (lng) are required.'}, status=status.HTTP_400_BAD_REQUEST)
+        class Coordinates(serializers.Serializer):
+            lat = serializers.FloatField(min_value=-90, max_value=90)
+            lng = serializers.FloatField(min_value=-180, max_value=180)
+
+        coordinates = Coordinates(data=request.data)
+        coordinates.is_valid(raise_exception=True)
+        lat, lng = coordinates.validated_data['lat'], coordinates.validated_data['lng']
+        if not isfinite(lat) or not isfinite(lng):
+            return Response({'error': 'Choose valid map coordinates.'}, status=status.HTTP_400_BAD_REQUEST)
 
         origin_str = f"{lat},{lng}"
 
@@ -409,11 +418,11 @@ class OptimizeRouteAPIView(APIView):
 
         import requests
         try:
-            response = requests.get(url, params=params, timeout=15)
+            response = requests.get(url, params=params, timeout=15, allow_redirects=False)
             response.raise_for_status()
             data = response.json()
-        except Exception as e:
-            return Response({'error': f"Failed to reach Google Maps API: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except (requests.RequestException, ValueError):
+            return Response({'error': 'The map service is temporarily unavailable.'}, status=status.HTTP_502_BAD_GATEWAY)
 
         if data.get('status') != 'OK':
             return Response({'error': f"Google Maps API error: {data.get('status')} - {data.get('error_message', '')}"}, status=status.HTTP_400_BAD_REQUEST)
@@ -467,8 +476,8 @@ class OptimizeRouteAPIView(APIView):
             
             return Response(saved_doc, status=status.HTTP_200_OK)
 
-        except Exception as e:
-            return Response({'error': f"MongoDB error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception:
+            return Response({'error': 'Route storage is temporarily unavailable.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 class GetOptimizedRouteAPIView(APIView):
     permission_classes = [IsRiderPermission]

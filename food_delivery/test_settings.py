@@ -3,17 +3,26 @@
 import os
 import sys
 from pathlib import Path
+from core.security import security_settings
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-SECRET_KEY = 'meal-drop-isolated-test-key'
+SECRET_KEY = 'meal-drop-isolated-test-key-never-use-for-production-1234567890'
 DEBUG = False
 ALLOWED_HOSTS = ['testserver', 'localhost', '127.0.0.1']
+globals().update(security_settings({}, debug=True))
+# Existing domain tests do not share rate budgets. Security tests explicitly
+# enable them and reset the isolated local store between test cases.
+RATE_LIMIT_ENABLED = False
 INSTALLED_APPS = [
     'django.contrib.admin', 'django.contrib.auth', 'django.contrib.contenttypes',
     'django.contrib.sessions', 'django.contrib.messages', 'django.contrib.staticfiles',
-    'django.contrib.gis', 'rest_framework', 'users', 'vendors', 'products', 'orders', 'riders', 'multivender',
+    'django.contrib.gis', 'rest_framework', 'rest_framework_simplejwt.token_blacklist',
+    'users', 'vendors', 'products', 'orders', 'riders', 'multivender',
 ]
 MIDDLEWARE = [
+    'core.middleware.TrustedProxyMiddleware',
+    'django.middleware.security.SecurityMiddleware',
+    'core.middleware.RequestGuardMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -41,10 +50,20 @@ STATICFILES_DIRS = [BASE_DIR / 'static']
 MEDIA_ROOT = BASE_DIR / '.test-media'
 MEDIA_URL = '/media/'
 PASSWORD_HASHERS = ['django.contrib.auth.hashers.MD5PasswordHasher']
-REST_FRAMEWORK = {'DEFAULT_AUTHENTICATION_CLASSES': [
-    'rest_framework_simplejwt.authentication.JWTAuthentication',
-    'rest_framework.authentication.SessionAuthentication',
-]}
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.IsAuthenticated'],
+    'DEFAULT_THROTTLE_CLASSES': ['core.throttling.APIRateLimitThrottle'],
+    'EXCEPTION_HANDLER': 'core.throttling.api_exception_handler',
+    'NUM_PROXIES': 0,
+}
+SIMPLE_JWT = {
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+}
 MONGO_URI = None
 MONGO_DATABASE = 'MealDrop'
 MONGO_ROUTE_COLLECTION = 'multivendor_route_states'

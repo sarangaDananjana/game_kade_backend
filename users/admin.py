@@ -15,10 +15,10 @@ class CustomUserAdmin(admin.ModelAdmin):
 
 @admin.register(OTP)
 class OTPAdmin(admin.ModelAdmin):
-    list_display = ('user', 'otp_code', 'is_used', 'created_at', 'is_valid')
+    list_display = ('user', 'otp_code', 'is_used', 'failed_attempts', 'created_at', 'is_valid')
     list_filter = ('is_used', 'created_at')
     search_fields = ('user__phone_number', 'otp_code')
-    readonly_fields = ('created_at',)
+    readonly_fields = ('created_at', 'failed_attempts')
 
 @admin.register(AppVersion)
 class AppVersionAdmin(admin.ModelAdmin):

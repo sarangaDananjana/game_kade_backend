@@ -1,6 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .delivery_quotes import BasketDeliveryQuoteView
+from orders.ordering_window import OrderingWindowView
 from .rider_views import (
     MultiVendorGetOptimizedRouteAPIView, MultiVendorOptimizeRouteAPIView,
     MultiVendorRiderOrdersWithRankAPIView, MultiVendorRiderOrderViewSet,
@@ -21,6 +22,7 @@ urlpatterns = [
     path('vendors/', VendorListView.as_view(), name='vendor-list'),
     path('vendors/<int:pk>/', VendorDetailView.as_view(), name='vendor-detail'),
     path('orders/create/', OrderCreateView.as_view(), name='order-create'),
+    path('orders/ordering-window/', OrderingWindowView.as_view(), name='ordering-window'),
     path('orders/delivery-quote/', BasketDeliveryQuoteView.as_view(), name='basket-delivery-quote'),
     path('orders/', OrderListView.as_view(), name='order-list'),
     path('orders/<int:pk>/', OrderDetailView.as_view({'get': 'retrieve', 'put': 'update', 'patch': 'partial_update'}), name='order-detail'),

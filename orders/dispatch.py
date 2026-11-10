@@ -36,9 +36,6 @@ def admin_login_view(request):
         password = request.POST.get('password', '').strip()
         
         user = authenticate(request, phone_number=phone_number, password=password)
-        if not user:
-            user = authenticate(request, username=phone_number, password=password)
-            
         if user and is_admin_user(user):
             login(request, user)
             next_url = request.GET.get('next') or request.POST.get('next') or reverse('dispatch-dashboard')
@@ -46,11 +43,7 @@ def admin_login_view(request):
                 next_url = reverse('dispatch-dashboard')
             return redirect(next_url)
         else:
-            existing = CustomUser.objects.filter(phone_number=phone_number).first()
-            if existing and not is_admin_user(existing):
-                error = "Access denied: Your account role does not have administrator privileges."
-            else:
-                error = "Invalid phone number or password. Please try again."
+            error = "Invalid phone number or password. Please try again."
                 
     return render(request, 'multivendor_admin_login.html', {
         'error': error,

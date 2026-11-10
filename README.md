@@ -45,15 +45,20 @@ Follow [MULTIVENDOR_MIGRATION.md](MULTIVENDOR_MIGRATION.md). The upgrade deliber
 
 ## Run
 
+Daily customer ordering hours are configurable in Django admin under **Orders → Ordering window**.
+See [ORDERING_WINDOW.md](ORDERING_WINDOW.md) for configuration, API behavior, and deployment.
+
 Use Python 3.12 or newer, PostgreSQL with PostGIS, and the dependencies in `requirements.txt`. Linux/Docker also needs GDAL and GEOS; the Dockerfile installs the GIS dependencies.
 
 The Docker configuration reads `.env.prod`, runs migrations and collects static files, then starts the web application and the rider offer dispatcher:
 
 ```sh
-docker compose up -d --build
+docker compose --env-file .env.prod up -d --build
 ```
 
-Use the existing `DATABASE_URL`, authentication configuration, SMS key, and map key. Route storage reads `MONGO_URI` from the environment. `MONGO_DATABASE` can select a database explicitly; otherwise the database in the existing URI is used, with `MealDrop` as the default for a new connection. Route API families share `MONGO_ROUTE_COLLECTION`, whose default is `multivendor_route_states`.
+Keep the existing `DATABASE_URL`, SMS key, and map key, and supply a new private `SECRET_KEY` for this security upgrade. Route storage reads `MONGO_URI` from the environment. `MONGO_DATABASE` can select a database explicitly; otherwise the database in the existing URI is used, with `MealDrop` as the default for a new connection. Route API families share `MONGO_ROUTE_COLLECTION`, whose default is `multivendor_route_states`.
+
+Request limits use the private Redis service included in Docker Compose. Production now requires a private `SECRET_KEY` and Redis, trusts only configured proxy addresses, and enforces HTTPS and request/upload limits. Follow [SECURITY.md](SECURITY.md) when deploying this security upgrade, including the Nginx changes and signing-key rotation. Rate budgets can be tuned through `.env.prod`; exceeded budgets return HTTP `429` with `Retry-After`.
 
 ## Verify
 

@@ -1,5 +1,5 @@
 # Use the official Python slim image as a base
-FROM python:3.13.1-slim
+FROM python:3.13-slim
 
 # Set environment variables
 # PYTHONDONTWRITEBYTECODE: Prevents Python from writing pyc files to disc

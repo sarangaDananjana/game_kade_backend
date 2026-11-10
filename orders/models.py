@@ -1,3 +1,4 @@
+from datetime import time
 from decimal import Decimal
 
 from django.conf import settings
@@ -13,6 +14,41 @@ from .services.identities import generate_location_identity
 
 
 DISTRICT_CHOICES = [('Matara', 'Matara')]
+
+
+class OrderingWindow(models.Model):
+    """One platform-wide daily schedule, expressed in Sri Lankan local time."""
+
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    enabled = models.BooleanField(
+        default=True, help_text='Uncheck to temporarily stop accepting new orders.',
+    )
+    opens_at = models.TimeField(
+        default=time(12), help_text='Daily opening time in Asia/Colombo (Sri Lanka).',
+    )
+    closes_at = models.TimeField(
+        default=time(17),
+        help_text='Orders stop at this time. An earlier closing time means the following day.',
+    )
+
+    class Meta:
+        verbose_name = 'Ordering window'
+        verbose_name_plural = 'Ordering window'
+        constraints = [
+            models.CheckConstraint(condition=models.Q(id=1), name='single_ordering_window'),
+            models.CheckConstraint(
+                condition=~models.Q(opens_at=models.F('closes_at')),
+                name='ordering_window_distinct_times',
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.opens_at is not None and self.opens_at == self.closes_at:
+            raise ValidationError({'closes_at': 'Opening and closing times must be different.'})
+
+    def __str__(self):
+        return 'Daily ordering hours (Sri Lanka)'
 
 
 class DeliveryZone(models.Model):
