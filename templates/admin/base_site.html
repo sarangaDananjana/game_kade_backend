@@ -101,3 +101,8 @@
     <h1 id="site-name"><a href="{% url 'admin:index' %}">{{ site_header|default:_('Django administration') }}</a></h1>
 </div>
 {% endblock %}
+
+{% block userlinks %}
+    <a href="{% url 'dispatch-session-planner' %}">Session map</a> /
+    {{ block.super }}
+{% endblock %}

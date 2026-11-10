@@ -27,6 +27,12 @@ class SessionAdmin(admin.ModelAdmin):
     inlines = [SessionOrderInline]
     actions = ['dispatch_sessions', 'confirm_finances']
 
+    def add_view(self, request, form_url='', extra_context=None):
+        if not self.has_add_permission(request):
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied
+        return HttpResponseRedirect(reverse('dispatch-session-planner'))
+
     def get_urls(self):
         return [path('<int:session_id>/update-row/', self.admin_site.admin_view(self.update_row), name='riders_session_update_row')] + super().get_urls()
 
@@ -104,6 +110,7 @@ class RiderInfoAdmin(admin.ModelAdmin):
 
 @admin.register(JobOffer)
 class JobOfferAdmin(admin.ModelAdmin):
+    change_list_template = 'admin/riders/joboffer/change_list.html'
     list_display = ['id', 'session', 'rider', 'status', 'acceptance_window', 'expires_at']
     list_filter = ['status']
     readonly_fields = ['session', 'rider', 'rider_reference', 'status', 'acceptance_window', 'offered_at', 'expires_at', 'responded_at', 'response_reason']

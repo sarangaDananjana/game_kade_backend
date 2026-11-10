@@ -7,6 +7,7 @@ __pycache__/
 *.py[cod]
 .test-media/
 .test-results/
+.impeccable/review/
 handover/
 staticfiles/
 media/

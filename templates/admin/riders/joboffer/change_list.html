@@ -1,0 +1,5 @@
+{% extends "admin/change_list.html" %}
+{% block content %}
+  <p>Job offers are generated from planned sessions and use the chosen rider's acceptance window. <a href="{% url 'dispatch-session-planner' %}">Open session map</a> to create a session or send a fresh offer.</p>
+  {{ block.super }}
+{% endblock %}

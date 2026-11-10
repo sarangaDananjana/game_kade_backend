@@ -15,6 +15,8 @@ Both order API families use `orders.Order`. Product prices come from `products.P
 
 The [rider model guide](riders/README.md) describes session finances and statistics. [MEAL_RIDER_API.md](MEAL_RIDER_API.md) documents timed offers, single-vendor sessions, cancellation/penalty records, scorer-controlled acceptance windows, and the rebuilt Meal Rider Android app.
 
+Platform admins can use the [map session planner](DISPATCH_SESSIONS.md) at `/dispatch/plan/` to select orders by pin or area, create a single-kitchen session, and send a timed offer to a rider.
+
 ## API
 
 | Operation | Canonical endpoint |

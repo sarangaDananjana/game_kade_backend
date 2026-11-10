@@ -24,6 +24,21 @@ def _active_run(rider_id):
     return Session.objects.filter(assigned_rider_id=rider_id, status__in=['accepted', 'in_progress']).exists()
 
 
+def _offer_to_rider(session, rider_id, now=None):
+    profile = RiderInfo.objects.select_for_update(of=('self',)).select_related('user').filter(
+        user_id=rider_id, user__role='rider', user__is_active=True).first()
+    if profile is None:
+        raise RiderActionError('Choose an active rider account.', 'rider_unavailable', 400)
+    if not profile_completion(profile)['is_complete']:
+        raise RiderActionError('This rider must complete their name, vehicle details, and emergency contact first.', 'profile_incomplete', 400)
+    if _active_run(profile.user_id) or JobOffer.objects.filter(rider_id=profile.user_id, status='pending').exists():
+        raise RiderActionError('This rider already has a session or a pending offer.', 'rider_busy')
+    now = now or timezone.now()
+    return JobOffer.objects.create(session=session, rider=profile.user, rider_reference=profile.user_id,
+        acceptance_window=profile.job_acceptance_window, offered_at=now,
+        expires_at=now + timedelta(seconds=profile.job_acceptance_window))
+
+
 def _offer_next(session, now=None):
     now = now or timezone.now()
     if session.status != Session.Status.PLANNED or not session.dispatch_enabled or session.assigned_rider_id or not session.vendor_id:
@@ -102,6 +117,8 @@ def create_session(vendor_id, order_ids, *, rider_cut=Decimal('0.00'), service_c
         raise RiderActionError('Each session contains orders from one kitchen.', 'mixed_vendors', 400)
     if any(order.status in ['delivered', 'cancelled'] or order.location_id is None for order in orders):
         raise RiderActionError('Choose active orders with a delivery address.', 'invalid_order', 400)
+    if any(not order.delivery_fee.is_finite() or order.delivery_fee < 0 for order in orders):
+        raise RiderActionError('Correct invalid delivery fees before creating a session.', 'invalid_delivery_fee', 400)
     if SessionOrder.objects.filter(order_reference__in=ids, status__in=['queued', 'delivered']).exists():
         raise RiderActionError('An order already belongs to a delivery run.', 'order_already_assigned')
     fields = dict(vendor=vendor, rider_cut=rider_cut, service_charge=service_charge, fuel_surge_addition=fuel_surge_addition,
@@ -112,25 +129,54 @@ def create_session(vendor_id, order_ids, *, rider_cut=Decimal('0.00'), service_c
         fields['estimated_duration'] = timedelta(minutes=estimated_minutes)
     session = Session.objects.create(**fields)
     Order.objects.filter(pk__in=ids).update(rider=None)
-    for order in orders:
-        order.rider_id = None
-        SessionOrder.objects.create(session=session, order=order, assigned_at=timezone.now())
+    # This locked batch has been checked above. Populate the snapshots normally
+    # set by SessionOrder.save, and let database constraints protect concurrent inserts.
+    assigned_at = timezone.now()
+    SessionOrder.objects.bulk_create([
+        SessionOrder(session=session, order=order, order_reference=order.pk,
+                     delivery_fee=order.delivery_fee, assigned_at=assigned_at)
+        for order in orders
+    ])
     if offer_to_rider is not None:
-        profile = RiderInfo.objects.select_for_update(of=('self',)).select_related('user').filter(
-            user_id=offer_to_rider, user__role='rider', user__is_active=True).first()
-        if profile is None:
-            raise RiderActionError('Choose an active rider account.', 'rider_unavailable', 400)
-        if not profile_completion(profile)['is_complete']:
-            raise RiderActionError('This rider must complete their name, vehicle details, and emergency contact first.', 'profile_incomplete', 400)
-        if _active_run(profile.user_id) or JobOffer.objects.filter(rider_id=profile.user_id, status='pending').exists():
-            raise RiderActionError('This rider already has a session or a pending offer.', 'rider_busy')
-        now = timezone.now()
-        JobOffer.objects.create(session=session, rider=profile.user, rider_reference=profile.user_id,
-            acceptance_window=profile.job_acceptance_window, offered_at=now,
-            expires_at=now + timedelta(seconds=profile.job_acceptance_window))
+        _offer_to_rider(session, offer_to_rider)
     elif dispatch_enabled:
         _offer_next(session)
     return session
+
+
+@transaction.atomic
+def offer_session(session_id, *, rider_id=None, automatic=False):
+    """Offer an existing planned run, preserving old offer deadlines and history."""
+    session = Session.objects.select_for_update().filter(pk=session_id).first()
+    if session is None:
+        raise RiderActionError('This session no longer exists.', 'session_not_found', 404)
+    if session.status != Session.Status.PLANNED or session.assigned_rider_id:
+        raise RiderActionError('Only an unassigned planned session can receive a new offer.', 'session_unavailable')
+    if not session.vendor_id or not session.vendor.is_active:
+        raise RiderActionError('This kitchen is not available.', 'vendor_unavailable', 400)
+    if rider_id is None and not automatic:
+        raise RiderActionError('Choose a rider or automatic dispatch.', 'rider_required', 400)
+    if rider_id is not None and automatic:
+        raise RiderActionError('Choose either a rider or automatic dispatch.', 'invalid_dispatch', 400)
+    links = list(session.session_orders.filter(status='queued'))
+    orders = list(Order.objects.select_for_update(of=('self',)).filter(
+        pk__in=[link.order_id for link in links]).select_related('location'))
+    if not links or len(orders) != len(links) or any(
+        order.vendor_id != session.vendor_id or order.location_id is None
+        or order.status in ['delivered', 'cancelled'] for order in orders
+    ):
+        raise RiderActionError('Resolve unavailable orders before offering this session.', 'invalid_order', 400)
+    now = timezone.now()
+    pending = session.job_offers.select_for_update().filter(status='pending').first()
+    if pending:
+        if pending.expires_at > now:
+            raise RiderActionError('This session already has a pending offer. Wait for its response or deadline.', 'offer_pending')
+        pending.status, pending.responded_at = JobOffer.Status.EXPIRED, now
+        pending.save(update_fields=['status', 'responded_at'])
+    session.dispatch_enabled, session.dispatch_after = automatic, None
+    session.save(update_fields=['dispatch_enabled', 'dispatch_after', 'updated_at'])
+    offer = _offer_next(session, now) if automatic else _offer_to_rider(session, rider_id, now)
+    return session, offer
 
 
 def _locked_offer(rider, offer_id):

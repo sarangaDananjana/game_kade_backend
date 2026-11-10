@@ -33,7 +33,7 @@ This link records one order's delivery attempt within a run. It stores the exist
 
 Attempt statuses are `queued`, `delivered`, `failed`, and `removed`. An order has at most one queued or delivered attempt across runs, which prevents overlapping assignments and double-counting successful delivery. A failed or removed attempt releases it for a later session; the old attempt remains as history.
 
-Create links through `SessionOrder.objects.create(session=session, order=order, ...)`, rather than the generic `session.orders.add()` method. Model saves populate the order ID and fee snapshots and validate the rider, status, and timestamps. Completed attempt history and fee snapshots remain when a source order is deleted; the order FK becomes null.
+Create individual links through `SessionOrder.objects.create(session=session, order=order, ...)`, rather than the generic `session.orders.add()` method. Model saves populate the order ID and fee snapshots and validate the rider, status, and timestamps. The session-creation service validates and locks the selected orders, then inserts the queued links together with explicit order-ID and fee snapshots; this avoids a database round trip for each field check on every order in a large map selection. Database constraints still prevent overlapping assignments. Completed attempt history and fee snapshots remain when a source order is deleted; the order FK becomes null.
 
 ## RiderInfo and dashboard statistics
 

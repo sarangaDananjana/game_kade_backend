@@ -1,0 +1,139 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Plan a delivery run · Meal Drop</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}">
+    <link rel="stylesheet" href="{% static 'dispatch/session_planner.css' %}">
+    <script src="{% static 'vendor/leaflet/leaflet.js' %}" defer></script>
+    <script src="{% static 'dispatch/session_planner.js' %}" defer></script>
+</head>
+<body class="planner">
+    <header class="planner-topbar">
+        <a class="planner-brand" href="{% url 'dispatch-dashboard' %}">
+            <img src="{% static 'img/mealdrop-logo.svg' %}" width="36" height="36" alt="">
+            <span>Meal Drop</span>
+        </a>
+        <nav aria-label="Dispatch navigation">
+            <a href="{% url 'dispatch-dashboard' %}">Order dashboard</a>
+            {% if request.user.is_staff %}<a href="{% url 'admin:riders_session_changelist' %}">Django admin</a>{% endif %}
+            <a href="{% url 'dispatch-logout' %}">Log out</a>
+        </nav>
+    </header>
+
+    <main class="planner-main">
+        <header class="page-heading">
+            <div>
+                <h1>Plan a delivery run</h1>
+                <p>Choose a kitchen and select orders on the map to build a session.</p>
+            </div>
+            <span id="live-day" class="day-label">Sri Lanka time</span>
+        </header>
+
+        <form class="planning-filters" id="planner-filters">
+            <div class="field date-field">
+                <label for="planning-date">Delivery day</label>
+                <input type="date" id="planning-date" value="{{ today }}" required>
+            </div>
+            <div class="field kitchen-field">
+                <label for="kitchen-filter">Kitchen</label>
+                <select id="kitchen-filter"><option value="">All kitchens · choose one to plan</option></select>
+            </div>
+            <button class="button secondary" id="refresh-data" type="button">Refresh orders</button>
+        </form>
+
+        <div id="planner-message" class="planner-message" role="status" aria-live="polite" tabindex="-1" hidden></div>
+        <p id="history-note" class="history-note" hidden>Viewing another delivery day. Choose today to create a session or send a new offer.</p>
+
+        <section class="planner-workbench" aria-label="Map and session planning">
+            <section class="planner-map-panel" aria-label="Delivery map">
+                <div class="map-toolbar">
+                    <h2 id="map-title">Delivery map</h2>
+                    <div class="map-actions">
+                        <button class="button secondary small" id="draw-area" type="button" aria-pressed="false" disabled>
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v14H5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-dasharray="3 2"/></svg>
+                            Select an area
+                        </button>
+                        <button class="button secondary small" id="fit-map" type="button">Fit map</button>
+                        <button class="button secondary small" id="back-to-orders" type="button" hidden>Back to orders</button>
+                    </div>
+                </div>
+                <div class="map-frame">
+                    <div id="order-map" role="region" aria-label="Order delivery locations in Matara"></div>
+                    <p id="area-instructions" class="map-instructions" role="status" hidden>Drag a box around delivery pins. Press Escape to cancel.</p>
+                    <p id="map-unavailable" class="map-instructions" hidden>The map could not load. You can select orders from the list or reload this page.</p>
+                </div>
+                <footer class="map-footer">
+                    <div class="map-legend" aria-label="Map legend">
+                        <span><i class="legend-dot available"></i>Available</span>
+                        <span><i class="legend-dot selected"></i>Selected</span>
+                        <span><i class="legend-dot reserved"></i>Reserved / resolved</span>
+                        <span><i class="legend-dot kitchen"></i>Kitchen pickup</span>
+                    </div>
+                    <p id="map-caption">Click a delivery pin to see its orders. Selected stops follow distance from the kitchen.</p>
+                </footer>
+            </section>
+
+            <section class="planner-side-panel" aria-label="Orders and sessions">
+                <div class="planner-tabs" role="tablist" aria-label="Planning views">
+                    <button id="orders-tab" role="tab" aria-selected="true" aria-controls="order-view" type="button">Orders <span id="order-count">0</span></button>
+                    <button id="sessions-tab" role="tab" aria-selected="false" aria-controls="sessions-view" tabindex="-1" type="button">Sessions <span id="session-count">0</span></button>
+                </div>
+                <div id="order-view" class="planner-view" role="tabpanel" aria-labelledby="orders-tab">
+                    <div class="order-list-tools">
+                        <label class="visually-hidden" for="order-search">Search orders</label>
+                        <input id="order-search" type="search" placeholder="Order, customer or location" autocomplete="off">
+                        <div class="order-list-actions">
+                            <label class="check-label"><input id="available-only" type="checkbox"> Available only</label>
+                            <button class="text-button" id="select-shown" type="button" disabled>Select shown</button>
+                        </div>
+                    </div>
+                    <p class="selection-hint" id="selection-hint">Choose a kitchen to select its orders.</p>
+                    <div id="order-list" class="order-list" role="list" aria-label="Orders for the chosen kitchen" aria-busy="true">
+                        <div class="loading-lines" aria-label="Loading orders"><span></span><span></span><span></span></div>
+                    </div>
+                    <form id="session-form" class="session-form">
+                        {% csrf_token %}
+                        <div class="form-heading">
+                            <h2>Create session</h2>
+                            <button class="text-button" id="clear-selection" type="button" disabled>Clear</button>
+                        </div>
+                        <p id="selection-summary" class="selection-summary" aria-live="polite">0 orders selected</p>
+                        <div class="field">
+                            <label for="rider-cut">Rider cut (LKR)</label>
+                            <input id="rider-cut" type="number" step="0.01" min="0" max="9999999999.99" value="0.00" required aria-describedby="delivery-fees">
+                            <span id="delivery-fees" class="field-hint">Combined delivery fees: LKR 0.00</span>
+                        </div>
+                        <details class="quote-details">
+                            <summary>Platform and fuel amounts</summary>
+                            <div class="quote-extra-fields">
+                                <div class="field"><label for="service-charge">Platform share (LKR)</label><input id="service-charge" type="number" step="0.01" min="0" max="9999999999.99" value="0.00" required></div>
+                                <div class="field"><label for="fuel-surge">Fuel addition (LKR)</label><input id="fuel-surge" type="number" step="0.01" min="0" max="9999999999.99" value="0.00" required></div>
+                            </div>
+                        </details>
+                        <div id="rider-field" class="field">
+                            <label for="new-rider">Rider or dispatch option</label>
+                            <select id="new-rider" required><option value="">Choose rider or dispatch option</option></select>
+                            <span id="offer-window" class="field-hint">The rider must accept before the offer expires.</span>
+                        </div>
+                        <p id="form-error" class="form-error" role="alert" hidden></p>
+                        <button id="create-session" class="button primary" type="submit" disabled>Create session &amp; offer</button>
+                        <p class="form-footnote">The rider is assigned when they accept. All quoted earnings are draft.</p>
+                    </form>
+                </div>
+                <div id="sessions-view" class="planner-view" role="tabpanel" aria-labelledby="sessions-tab" hidden>
+                    <p id="sessions-summary" class="sessions-summary">Sessions for the selected day.</p>
+                    <div id="session-list" class="session-list" role="list" aria-label="Delivery sessions"></div>
+                </div>
+            </section>
+        </section>
+        <p class="planner-footnote">One kitchen per session. Riders use their app to accept, confirm pickup and verify each delivery.</p>
+    </main>
+    {{ planner_config|json_script:"planner-config" }}
+</body>
+</html>

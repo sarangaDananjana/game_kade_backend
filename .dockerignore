@@ -8,6 +8,7 @@ venv
 .env.*
 !.env.example
 .test-results
+.impeccable/review
 .test-media
 media
 staticfiles
