@@ -1,29 +1,20 @@
 import requests
 import secrets
 import os
-import re
 import logging
 from django.conf import settings
+from .phone_numbers import normalize_mobile_number
 
 logger = logging.getLogger(__name__)
 
 
-def normalize_mobile_number(value):
-    if isinstance(value, bool) or not isinstance(value, (str, int)):
-        raise ValueError('Enter a valid Sri Lankan mobile number.')
-    text = str(value).strip()
-    if not re.fullmatch(r'[0-9+ ()-]+', text):
-        raise ValueError('Enter a valid Sri Lankan mobile number.')
-    digits = re.sub(r'[^0-9]', '', text)
-    if digits.startswith('0094'):
-        digits = digits[4:]
-    elif digits.startswith('94'):
-        digits = digits[2:]
-    if len(digits) == 9 and digits.startswith('7'):
-        digits = '0' + digits
-    if len(digits) != 10 or not digits.startswith('07'):
-        raise ValueError('Enter a mobile number such as 0771234567.')
-    return digits
+class SmsDeliveryUncertain(Exception):
+    """The provider may have sent the SMS before its response failed."""
+
+
+def should_bypass_otp_sms(phone):
+    phone = normalize_mobile_number(phone)
+    return phone in getattr(settings, 'OTP_SMS_BYPASS_NUMBERS', set())
 
 
 def find_user_by_mobile(phone):
@@ -46,7 +37,7 @@ def send_otp_sms(phone, otp_code):
         phone = normalize_mobile_number(phone)
     except ValueError:
         return False
-    if phone in getattr(settings, 'OTP_SMS_BYPASS_NUMBERS', set()):
+    if should_bypass_otp_sms(phone):
         return True
     message = f"Your Meal Drop OTP code is: {otp_code}. It will expire in 5 minutes."
     api_key = os.environ.get("TEXT_LK_API_KEY")
@@ -63,7 +54,7 @@ def send_otp_sms(phone, otp_code):
                 "Accept": "application/json"
             },
             json={
-                "recipient": '94' + normalize_mobile_number(phone)[1:],
+                "recipient": '94' + phone[1:],
                 "sender_id": "One Mind",
                 "type": "plain",
                 "message": message
@@ -75,11 +66,28 @@ def send_otp_sms(phone, otp_code):
             logger.warning('SMS provider returned HTTP %s.', response.status_code)
             return False
         # Text.lk may return HTTP 200 for an application-level error.
-        result = response.json()
-        success = isinstance(result, dict) and str(result.get('status', '')).lower() == 'success'
-        if not success:
+        try:
+            result = response.json()
+        except ValueError:
+            logger.warning('SMS provider returned an unreadable success response; delivery is uncertain.')
+            raise SmsDeliveryUncertain from None
+        provider_status = str(result.get('status', '')).lower() if isinstance(result, dict) else ''
+        if provider_status == 'success':
+            return True
+        if provider_status in {'error', 'fail', 'failed'}:
             logger.warning('SMS provider did not accept the login message.')
-        return success
-    except (requests.exceptions.RequestException, ValueError) as e:
+            return False
+        logger.warning('SMS provider returned an unknown success response; delivery is uncertain.')
+        raise SmsDeliveryUncertain
+    except requests.exceptions.ConnectTimeout:
+        logger.warning('SMS provider connection timed out before delivery.')
+        return False
+    except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError,
+            requests.exceptions.ChunkedEncodingError, requests.exceptions.ContentDecodingError):
+        # A lost response can happen after Text.lk has accepted/sent the code.
+        # Keep that code verifiable rather than invalidating an arriving SMS.
+        logger.warning('SMS provider response was lost; delivery is uncertain.')
+        raise SmsDeliveryUncertain from None
+    except requests.exceptions.RequestException as e:
         logger.warning('SMS request failed (%s).', type(e).__name__)
         return False

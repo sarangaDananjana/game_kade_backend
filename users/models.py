@@ -71,10 +71,12 @@ class OTP(models.Model):
     is_used = models.BooleanField(default=False)
     failed_attempts = models.PositiveSmallIntegerField(default=0)
 
+    @property
+    def expires_at(self):
+        return self.created_at + timezone.timedelta(minutes=5)
+
     def is_valid(self):
-        # OTP expires after 5 minutes
-        expiration_time = self.created_at + timezone.timedelta(minutes=5)
-        return (timezone.now() <= expiration_time and not self.is_used and
+        return (timezone.now() <= self.expires_at and not self.is_used and
                 self.failed_attempts < getattr(settings, 'OTP_MAX_FAILED_ATTEMPTS', 5))
 
 

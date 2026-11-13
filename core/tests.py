@@ -54,7 +54,7 @@ class SecurityConfigurationTests(SimpleTestCase):
             security_settings({}, debug=False)
         config = security_settings({'RATE_LIMIT_REDIS_URL': 'redis://private:6379/0'}, debug=False)
         self.assertFalse(config['RATE_LIMIT_USE_LOCAL'])
-        self.assertEqual(config['OTP_SMS_BYPASS_NUMBERS'], set())
+        self.assertEqual(config['OTP_SMS_BYPASS_NUMBERS'], {'0774610536', '0721992125'})
         self.assertTrue(config['SESSION_COOKIE_SECURE'])
         self.assertTrue(config['SECURE_SSL_REDIRECT'])
 
@@ -63,9 +63,14 @@ class SecurityConfigurationTests(SimpleTestCase):
             {'RATE_LIMIT_IP': ''}, {'RATE_LIMIT_IP': '0/minute'}, {'RATE_LIMIT_IP': '10/week'},
             {'TRUSTED_PROXY_CIDRS': 'anything'}, {'MAX_REQUEST_BODY_BYTES': '-1'},
             {'OTP_MAX_FAILED_ATTEMPTS': '100'}, {'SECURE_SSL_REDIRECT': 'maybe'},
+            {'OTP_SMS_BYPASS_NUMBERS': '12345'},
         ]:
             with self.subTest(overrides=overrides), self.assertRaises(ImproperlyConfigured):
                 security_settings(overrides, debug=True)
+
+    def test_sms_bypass_configuration_normalizes_international_numbers(self):
+        config = security_settings({'OTP_SMS_BYPASS_NUMBERS': '+94 77 461 0536,0094721992125'}, debug=True)
+        self.assertEqual(config['OTP_SMS_BYPASS_NUMBERS'], {'0774610536', '0721992125'})
 
     def test_untrusted_peer_cannot_choose_its_ip(self):
         address, trusted = client_address({

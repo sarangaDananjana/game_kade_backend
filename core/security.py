@@ -4,6 +4,10 @@ import ipaddress
 import re
 
 from django.core.exceptions import ImproperlyConfigured
+from users.phone_numbers import normalize_mobile_number
+
+
+DEFAULT_OTP_SMS_BYPASS_NUMBERS = '0774610536,0721992125'
 
 
 DEFAULT_RATE_LIMITS = {
@@ -85,6 +89,13 @@ def security_settings(environment, *, debug):
     max_attempts = env_int(environment, 'OTP_MAX_FAILED_ATTEMPTS', 5)
     if max_attempts > 10:
         raise ImproperlyConfigured('OTP_MAX_FAILED_ATTEMPTS cannot exceed 10.')
+    try:
+        bypass_numbers = {
+            normalize_mobile_number(number)
+            for number in env_list(environment, 'OTP_SMS_BYPASS_NUMBERS', DEFAULT_OTP_SMS_BYPASS_NUMBERS)
+        }
+    except ValueError:
+        raise ImproperlyConfigured('OTP_SMS_BYPASS_NUMBERS must contain valid Sri Lankan mobile numbers.') from None
     body_limit = env_int(environment, 'MAX_REQUEST_BODY_BYTES', 1024 * 1024)
     return {
         'RATE_LIMIT_ENABLED': True,
@@ -101,7 +112,7 @@ def security_settings(environment, *, debug):
         'DATA_UPLOAD_MAX_NUMBER_FILES': 5,
         'FILE_UPLOAD_MAX_MEMORY_SIZE': 256 * 1024,
         'OTP_MAX_FAILED_ATTEMPTS': max_attempts,
-        'OTP_SMS_BYPASS_NUMBERS': set(env_list(environment, 'OTP_SMS_BYPASS_NUMBERS')),
+        'OTP_SMS_BYPASS_NUMBERS': bypass_numbers,
         'SECURE_SSL_REDIRECT': env_bool(environment, 'SECURE_SSL_REDIRECT', not debug),
         'SECURE_HSTS_SECONDS': env_int(environment, 'SECURE_HSTS_SECONDS', 86400) if not debug else 0,
         'SECURE_HSTS_INCLUDE_SUBDOMAINS': False,

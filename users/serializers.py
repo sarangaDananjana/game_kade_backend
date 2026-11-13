@@ -19,7 +19,14 @@ class SendOTPInput(PhoneInput):
 
 
 class VerifyOTPInput(PhoneInput):
-    otp_code = serializers.RegexField(r'^[0-9]{6}$', min_length=6, max_length=6)
+    otp_code = serializers.RegexField(
+        r'^[0-9]{6}$', min_length=6, max_length=6,
+        error_messages={
+            'invalid': 'Enter the six-digit OTP.',
+            'min_length': 'Enter the six-digit OTP.',
+            'max_length': 'Enter the six-digit OTP.',
+        },
+    )
 
 
 class ProfileInput(serializers.Serializer):
