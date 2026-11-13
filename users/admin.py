@@ -1,4 +1,6 @@
 from django.contrib import admin
+from django.conf import settings
+from django.utils import timezone
 from .models import CustomUser, OTP, AppVersion
 
 
@@ -15,10 +17,25 @@ class CustomUserAdmin(admin.ModelAdmin):
 
 @admin.register(OTP)
 class OTPAdmin(admin.ModelAdmin):
-    list_display = ('user', 'otp_code', 'is_used', 'failed_attempts', 'created_at', 'is_valid')
+    list_display = ('user', 'otp_code', 'code_status', 'created_at', 'expires_at', 'failed_attempts')
     list_filter = ('is_used', 'created_at')
     search_fields = ('user__phone_number', 'otp_code')
-    readonly_fields = ('created_at', 'failed_attempts')
+    readonly_fields = ('created_at', 'expires_at', 'failed_attempts')
+    ordering = ('-created_at', '-pk')
+
+    @admin.display(description='Status')
+    def code_status(self, obj):
+        if obj.failed_attempts >= settings.OTP_MAX_FAILED_ATTEMPTS:
+            return 'Locked'
+        if obj.is_used:
+            return 'Used / replaced'
+        if timezone.now() > obj.expires_at:
+            return 'Expired'
+        return 'Active'
+
+    @admin.display(description='Expires at', ordering='created_at')
+    def expires_at(self, obj):
+        return obj.expires_at
 
 @admin.register(AppVersion)
 class AppVersionAdmin(admin.ModelAdmin):

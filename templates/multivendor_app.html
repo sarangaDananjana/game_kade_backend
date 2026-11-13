@@ -104,6 +104,43 @@
             font-family: var(--sans);
         }
 
+        #authView input {
+            font-size: 1rem;
+            caret-color: var(--forest);
+        }
+
+        #authView :focus-visible {
+            outline: 2px solid var(--forest);
+            outline-offset: 3px;
+        }
+
+        #authView button:disabled {
+            cursor: wait;
+            opacity: 0.65;
+        }
+
+        .auth-message {
+            line-height: 1.5;
+            overflow-wrap: anywhere;
+        }
+
+        .auth-error { color: #9c2d2d; }
+
+        .auth-secondary-actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 16px;
+        }
+
+        .auth-secondary-actions button {
+            min-height: 44px;
+            background: transparent;
+            color: var(--forest);
+            border: 1px solid var(--sand-mid);
+            padding: 10px 12px;
+        }
+
         /* Views */
         .view { display: none; }
         .view.active { display: block; }
@@ -383,28 +420,36 @@
         <!-- Auth View -->
         <div id="authView" class="view active card" style="max-width: 400px; margin: 60px auto;">
             <h2>Login or Register</h2>
-            <div id="phoneStep">
+            <form id="phoneStep" novalidate onsubmit="event.preventDefault(); sendOTP();">
                 <div class="input-group">
-                    <label>Phone Number</label>
-                    <input type="text" id="phoneInput" placeholder="e.g. 0712345678" value="">
+                    <label for="phoneInput">Phone Number</label>
+                    <input type="tel" id="phoneInput" inputmode="tel" autocomplete="tel" maxlength="32" placeholder="e.g. 0712345678" value="" aria-describedby="authError">
                 </div>
-                <button class="btn" style="width: 100%" onclick="sendOTP()">Continue</button>
-            </div>
-            <div id="nameStep" style="display: none;">
+                <button type="submit" class="btn" style="width: 100%">Continue</button>
+            </form>
+            <form id="nameStep" style="display: none;" novalidate onsubmit="event.preventDefault(); sendOTP(true);">
                 <p style="color: var(--mid-grey); margin-bottom: 20px;">It looks like you're new here! Please enter your name.</p>
                 <div class="input-group">
-                    <label>Your Name</label>
-                    <input type="text" id="nameInput" placeholder="e.g. John Doe">
+                    <label for="nameInput">Your Name</label>
+                    <input type="text" id="nameInput" autocomplete="name" maxlength="255" placeholder="e.g. John Doe" aria-describedby="authError">
                 </div>
-                <button class="btn" style="width: 100%" onclick="sendOTP(true)">Send OTP</button>
-            </div>
-            <div id="otpStep" style="display: none;">
+                <button type="submit" class="btn" style="width: 100%">Send OTP</button>
+            </form>
+            <form id="otpStep" style="display: none;" novalidate onsubmit="event.preventDefault(); verifyOTP();">
+                <p id="otpDeliveryMessage" class="auth-message" role="status"></p>
                 <div class="input-group">
-                    <label>OTP Code</label>
-                    <input type="text" id="otpInput" placeholder="e.g. 00000">
+                    <label for="otpInput">OTP Code</label>
+                    <input type="text" id="otpInput" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="e.g. 123456" aria-describedby="otpExpiryMessage authError">
                 </div>
-                <button class="btn" style="width: 100%" onclick="verifyOTP()">Verify</button>
-            </div>
+                <p id="otpExpiryMessage" class="auth-message">Codes expire after five minutes. Use the latest code.</p>
+                <button type="submit" class="btn" style="width: 100%">Verify</button>
+                <div class="auth-secondary-actions">
+                    <button type="button" id="otpResendButton" class="btn" onclick="sendOTP()">Send another code</button>
+                    <button type="button" class="btn" onclick="resetAuth()">Change number</button>
+                </div>
+            </form>
+            <p id="authStatus" class="auth-message" role="status" hidden></p>
+            <p id="authError" class="auth-message auth-error" role="alert" hidden></p>
         </div>
 
         <!-- Vendors View -->
@@ -472,6 +517,7 @@
         let currentVendor = null;
         let cart = [];
         let isClosed = false;
+        let authBusy = false;
 
         async function updateTimeRestriction() {
             const banner = document.getElementById('timeBanner');
@@ -531,60 +577,135 @@
         }
 
         // --- AUTH ---
+        function setAuthBusy(busy, message = '') {
+            authBusy = busy;
+            document.querySelectorAll('#authView input, #authView button').forEach(element => { element.disabled = busy; });
+            const status = document.getElementById('authStatus');
+            status.textContent = message;
+            status.hidden = !message;
+        }
+
+        function showAuthError(message = '') {
+            const error = document.getElementById('authError');
+            error.textContent = message;
+            error.hidden = !message;
+        }
+
+        function authApiError(data, fallback) {
+            for (const key of ['error', 'detail', 'otp_code', 'phone_number', 'name', 'non_field_errors']) {
+                const value = data?.[key];
+                if (typeof value === 'string' && value.trim()) return value;
+                if (Array.isArray(value) && typeof value[0] === 'string') return value[0];
+            }
+            return fallback;
+        }
+
+        function resetAuth() {
+            if (authBusy) return;
+            currentPhone = '';
+            document.getElementById('otpInput').value = '';
+            document.getElementById('phoneStep').style.display = 'block';
+            document.getElementById('nameStep').style.display = 'none';
+            document.getElementById('otpStep').style.display = 'none';
+            showAuthError();
+            document.getElementById('phoneInput').focus();
+        }
+
         async function sendOTP(withName = false) {
-            currentPhone = document.getElementById('phoneInput').value;
+            if (authBusy) return;
+            currentPhone = document.getElementById('phoneInput').value.trim();
+            if (!currentPhone) {
+                showAuthError('Enter your mobile number.');
+                return;
+            }
             const payload = { phone_number: currentPhone, role: 'customer' };
             if (withName) {
-                payload.name = document.getElementById('nameInput').value;
+                payload.name = document.getElementById('nameInput').value.trim();
+                if (!payload.name) {
+                    showAuthError('Enter your name to continue.');
+                    return;
+                }
             }
-
+            showAuthError();
+            setAuthBusy(true, 'Requesting your code...');
+            let focusField;
             try {
                 const res = await fetch('/api/auth/send-otp/', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
-                const data = await res.json();
+                const data = await res.json().catch(() => null);
 
-                if (res.ok || res.status === 201) {
-                    if (data.is_new_user && !withName) {
+                if (res.ok && data) {
+                    if (data.is_new_user) {
                         // User is new, ask for name first
                         document.getElementById('phoneStep').style.display = 'none';
                         document.getElementById('nameStep').style.display = 'block';
+                        document.getElementById('otpStep').style.display = 'none';
+                        focusField = 'nameInput';
                     } else {
                         // OTP Sent
                         document.getElementById('phoneStep').style.display = 'none';
                         document.getElementById('nameStep').style.display = 'none';
                         document.getElementById('otpStep').style.display = 'block';
+                        document.getElementById('otpInput').value = '';
+                        const adminCode = data.delivery_method === 'admin';
+                        document.getElementById('otpDeliveryMessage').textContent = adminCode
+                            ? 'Get the latest six-digit code from Users / OTPs in the admin dashboard.'
+                            : data.delivery_pending ? data.message : `Enter the six-digit code sent to ${currentPhone}.`;
+                        document.getElementById('otpResendButton').textContent = adminCode ? 'Generate another code' : 'Send another code';
+                        focusField = 'otpInput';
                     }
                 } else {
-                    alert("Failed to send OTP: " + (data.error || "Unknown error"));
+                    showAuthError(authApiError(data, res.status === 429
+                        ? 'Too many requests. Please wait before requesting another code.'
+                        : 'Could not send your code. Please try again.'));
                 }
             } catch (e) {
-                alert("Error connecting to server.");
+                showAuthError('Could not reach the login service. Check your connection and try again.');
+            } finally {
+                setAuthBusy(false);
+                if (focusField) document.getElementById(focusField).focus();
             }
         }
 
         async function verifyOTP() {
-            const otp = document.getElementById('otpInput').value;
-            const res = await fetch('/api/auth/verify-otp/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phone_number: currentPhone, otp_code: otp })
-            });
-            if (res.ok) {
-                const data = await res.json();
-                accessToken = data.access;
-                refreshToken = data.refresh;
-                userName = data.name;
-                localStorage.setItem('access_token', accessToken);
-                localStorage.setItem('refresh_token', refreshToken);
-                if (userName) localStorage.setItem('user_name', userName);
+            if (authBusy) return;
+            const otp = document.getElementById('otpInput').value.trim();
+            if (!/^[0-9]{6}$/.test(otp)) {
+                showAuthError('Enter the six-digit OTP.');
+                return;
+            }
+            showAuthError();
+            setAuthBusy(true, 'Checking your code...');
+            try {
+                const res = await fetch('/api/auth/verify-otp/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone_number: currentPhone, otp_code: otp })
+                });
+                const data = await res.json().catch(() => null);
+                if (res.ok && data?.access && data?.refresh) {
+                    accessToken = data.access;
+                    refreshToken = data.refresh;
+                    userName = data.name;
+                    localStorage.setItem('access_token', accessToken);
+                    localStorage.setItem('refresh_token', refreshToken);
+                    if (userName) localStorage.setItem('user_name', userName);
 
-                document.getElementById('userPhone').innerText = userName ? `Hi, ${userName}` : currentPhone;
-                showView('vendorsView');
-            } else {
-                alert("Invalid OTP");
+                    document.getElementById('userPhone').innerText = userName ? `Hi, ${userName}` : currentPhone;
+                    showView('vendorsView');
+                } else {
+                    showAuthError(authApiError(data, res.status === 429
+                        ? 'Too many attempts. Please wait before trying again.'
+                        : res.status >= 500 ? 'The login service is unavailable. Please try again.'
+                        : 'Could not verify your code. Request a new code and try again.'));
+                }
+            } catch (e) {
+                showAuthError('Could not reach the login service. Check your connection and try again.');
+            } finally {
+                setAuthBusy(false);
             }
         }
 
