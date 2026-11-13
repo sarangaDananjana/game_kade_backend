@@ -41,6 +41,16 @@ Platform admins can use the [map session planner](DISPATCH_SESSIONS.md) at `/dis
 The existing `/shop/` customer, rider, and dispatch paths remain aliases for the shared handlers. Meal Drop's Android `ApiService.kt` uses the canonical paths. Authentication, order request/response fields, current multi-vendor IDs, image paths, delivery quotes, and numeric QR/PIN behavior are retained.
 Bookmarks for the former `/admin/multivender/` model pages redirect to their owning apps.
 
+## OTP login
+
+`0774610536` and `0721992125` always receive admin-only login codes and never call Text.lk. Their exclusions remain enabled when an older deployment has an empty bypass setting. `OTP_SMS_BYPASS_NUMBERS` in `.env.prod` can add other admin-only numbers; local, `+94`, and `0094` formats are normalized. Other numbers use SMS.
+
+After requesting a code, open **Users → OTPs** in Django admin and use the newest **Active** six-digit code for that number. The admin shows its expiry in Sri Lanka time. Codes expire after five minutes; requesting another replaces every previous code. Account roles are preserved.
+
+The send API includes `delivery_method`, `otp_length`, `expires_at` (an offset-aware timestamp), and `expires_in_seconds`. A lost Text.lk response returns HTTP `202` with `delivery_pending=true`: delivery is unconfirmed, and an arriving code remains valid until expiry. An explicit provider rejection returns an error and invalidates the code. Verification distinguishes expired, used/replaced, and locked codes. No database migration is needed for this update.
+
+Rebuild/recreate the backend containers to apply the code and environment changes. The website and updated Meal Drop Android client display API errors and admin-code instructions.
+
 ## Upgrade from the old shop backend
 
 Follow [MULTIVENDOR_MIGRATION.md](MULTIVENDOR_MIGRATION.md). The upgrade deliberately deletes the old single-shop products, orders, and order items, as requested for this development system. It preserves current multi-vendor records, shared users, delivery polygons, pricing settings, and saved addresses.

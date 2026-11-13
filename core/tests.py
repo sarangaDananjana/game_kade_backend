@@ -72,6 +72,14 @@ class SecurityConfigurationTests(SimpleTestCase):
         config = security_settings({'OTP_SMS_BYPASS_NUMBERS': '+94 77 461 0536,0094721992125'}, debug=True)
         self.assertEqual(config['OTP_SMS_BYPASS_NUMBERS'], {'0774610536', '0721992125'})
 
+    def test_empty_or_extra_bypass_configuration_cannot_send_sms_to_owner_accounts(self):
+        for value in ['', ' ', '0771000001']:
+            with self.subTest(value=value):
+                config = security_settings({'OTP_SMS_BYPASS_NUMBERS': value}, debug=True)
+                self.assertTrue({'0774610536', '0721992125'} <= config['OTP_SMS_BYPASS_NUMBERS'])
+                if value.strip():
+                    self.assertIn('0771000001', config['OTP_SMS_BYPASS_NUMBERS'])
+
     def test_untrusted_peer_cannot_choose_its_ip(self):
         address, trusted = client_address({
             'REMOTE_ADDR': '198.51.100.5', 'HTTP_X_FORWARDED_FOR': '203.0.113.9',

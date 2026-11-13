@@ -119,6 +119,11 @@
             opacity: 0.65;
         }
 
+        #authView button { min-height: 44px; }
+
+        #authView button[type="submit"] { background: #ae5934; }
+        #authView button[type="submit"]:hover { background: #9e5231; }
+
         .auth-message {
             line-height: 1.5;
             overflow-wrap: anywhere;
@@ -140,6 +145,8 @@
             border: 1px solid var(--sand-mid);
             padding: 10px 12px;
         }
+
+        .auth-secondary-actions button:hover { background: var(--sand); }
 
         /* Views */
         .view { display: none; }
@@ -653,7 +660,7 @@
                         const adminCode = data.delivery_method === 'admin';
                         document.getElementById('otpDeliveryMessage').textContent = adminCode
                             ? 'Get the latest six-digit code from Users / OTPs in the admin dashboard.'
-                            : data.delivery_pending ? data.message : `Enter the six-digit code sent to ${currentPhone}.`;
+                            : data.delivery_pending ? (data.message || 'SMS delivery could not be confirmed. If a code arrives, enter it here.') : `Enter the six-digit code sent to ${currentPhone}.`;
                         document.getElementById('otpResendButton').textContent = adminCode ? 'Generate another code' : 'Send another code';
                         focusField = 'otpInput';
                     }

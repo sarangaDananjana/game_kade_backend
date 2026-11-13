@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django.conf import settings
+from django.db.models import OuterRef, Subquery
 from django.utils import timezone
 from .models import CustomUser, OTP, AppVersion
 
@@ -23,12 +24,18 @@ class OTPAdmin(admin.ModelAdmin):
     readonly_fields = ('created_at', 'expires_at', 'failed_attempts')
     ordering = ('-created_at', '-pk')
 
+    def get_queryset(self, request):
+        latest = OTP.objects.filter(user_id=OuterRef('user_id')).order_by('-created_at', '-pk')
+        return super().get_queryset(request).annotate(latest_otp_id=Subquery(latest.values('pk')[:1]))
+
     @admin.display(description='Status')
     def code_status(self, obj):
         if obj.failed_attempts >= settings.OTP_MAX_FAILED_ATTEMPTS:
             return 'Locked'
         if obj.is_used:
             return 'Used / replaced'
+        if getattr(obj, 'latest_otp_id', obj.pk) != obj.pk:
+            return 'Replaced'
         if timezone.now() > obj.expires_at:
             return 'Expired'
         return 'Active'

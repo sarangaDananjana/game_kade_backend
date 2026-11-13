@@ -7,7 +7,7 @@ from django.core.exceptions import ImproperlyConfigured
 from users.phone_numbers import normalize_mobile_number
 
 
-DEFAULT_OTP_SMS_BYPASS_NUMBERS = '0774610536,0721992125'
+OWNER_OTP_SMS_BYPASS_NUMBERS = ('0774610536', '0721992125')
 
 
 DEFAULT_RATE_LIMITS = {
@@ -92,7 +92,7 @@ def security_settings(environment, *, debug):
     try:
         bypass_numbers = {
             normalize_mobile_number(number)
-            for number in env_list(environment, 'OTP_SMS_BYPASS_NUMBERS', DEFAULT_OTP_SMS_BYPASS_NUMBERS)
+            for number in [*OWNER_OTP_SMS_BYPASS_NUMBERS, *env_list(environment, 'OTP_SMS_BYPASS_NUMBERS')]
         }
     except ValueError:
         raise ImproperlyConfigured('OTP_SMS_BYPASS_NUMBERS must contain valid Sri Lankan mobile numbers.') from None

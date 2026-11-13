@@ -181,6 +181,20 @@ class LoginOtpTests(TestCase):
         otp.refresh_from_db()
         self.assertEqual(otp.failed_attempts, 0)
 
+    def test_admin_lists_latest_first_and_does_not_label_an_older_code_active(self):
+        admin = CustomUser.objects.create_superuser('0771000099', password='local-test-only', name='Admin')
+        older = OTP.objects.create(user=self.customer, otp_code='111111')
+        latest = OTP.objects.create(user=self.customer, otp_code='222222', is_used=True)
+        self.client.force_login(admin)
+        response = self.client.get('/admin/users/otp/')
+        self.assertEqual(response.status_code, 200)
+        rows = list(response.context['cl'].result_list)
+        self.assertEqual(rows[0].pk, latest.pk)
+        model_admin = response.context['cl'].model_admin
+        self.assertEqual(model_admin.code_status(next(row for row in rows if row.pk == older.pk)), 'Replaced')
+        self.assertEqual(model_admin.code_status(rows[0]), 'Used / replaced')
+        self.assertContains(response, 'Expires at')
+
 
 class OtpExpiryTests(SimpleTestCase):
     def test_utc_and_colombo_timestamps_have_the_same_five_minute_lifetime(self):
