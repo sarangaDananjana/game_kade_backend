@@ -123,8 +123,13 @@ class JobsView(RiderAPIView):
 class OfferActionView(RiderAPIView):
     def post(self, request, pk, action):
         if action == 'accept':
-            session = accept_offer(request.user, pk)
-            return Response(SessionSerializer(session, context={'request': request}).data)
+            class Input(serializers.Serializer):
+                expected_acceptance_fee = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0, required=False)
+            data = Input(data=request.data)
+            data.is_valid(raise_exception=True)
+            session = accept_offer(request.user, pk, data.validated_data.get('expected_acceptance_fee'))
+            return Response({**SessionSerializer(session, context={'request': request}).data,
+                'topup_balance_after': str(self.profile(request).topup_balance)})
         if action == 'decline':
             reason = str(request.data.get('reason', ''))[:255]
             decline_offer(request.user, pk, reason)

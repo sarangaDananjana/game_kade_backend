@@ -11,7 +11,9 @@ from .services import RiderActionError, cancel_session, start_session
 
 @transaction.atomic
 def update_session_from_admin(session_id, *, rider_id, status, finance_status):
-    session = Session.objects.select_for_update().get(pk=session_id)
+    session = Session.objects.select_for_update().filter(pk=session_id).first()
+    if session is None:
+        raise RiderActionError('This session no longer exists. Refresh the session list.', 'session_not_found', 404)
     if status not in Session.Status.values or finance_status not in Session.FinanceStatus.values:
         raise RiderActionError('Choose a valid session and financial status.', status=400)
     if session.finance_status == Session.FinanceStatus.CONFIRMED:
@@ -27,7 +29,7 @@ def update_session_from_admin(session_id, *, rider_id, status, finance_status):
         if rider_id is None and status != Session.Status.PLANNED:
             raise RiderActionError('Choose a rider before accepting or starting a session.', status=400)
         if rider_id is not None:
-            profile = RiderInfo.objects.select_for_update().select_related('user').filter(
+            profile = RiderInfo.objects.select_for_update(of=('self',)).select_related('user').filter(
                 user_id=rider_id, user__role='rider', user__is_active=True).first()
             if profile is None or not profile_completion(profile)['is_complete']:
                 raise RiderActionError('Choose an active rider with a complete profile.', 'profile_incomplete', 400)

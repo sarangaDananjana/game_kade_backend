@@ -31,6 +31,7 @@ class RiderApiTests(OrderFixtures):
         for rider, score, window in [(self.rider, '95.00', 90), (self.other_rider, '75.00', 45)]:
             profile = rider.rider_info
             profile.is_available, profile.score, profile.job_acceptance_window = True, Decimal(score), window
+            profile.topup_balance = Decimal('1000.00')
             profile.save()
         self.order = self.make_order(rider=None, status='preparing')
 
@@ -73,14 +74,14 @@ class RiderApiTests(OrderFixtures):
         self.assertEqual(second.rider_id, self.other_rider.pk)
         self.assertEqual(second.acceptance_window, 45)
 
-    def test_acceptance_binds_shared_orders_and_rejects_other_riders_and_second_acceptance(self):
+    def test_acceptance_binds_shared_orders_rejects_other_riders_and_retries_safely(self):
         session = self.session()
         offer = session.job_offers.get(status='pending')
         self.auth(self.other_rider)
         self.assertEqual(self.client.post(f'/api/riders/jobs/{offer.pk}/accept/', {}, format='json').status_code, 404)
         self.auth()
         self.assertEqual(self.client.post(f'/api/riders/jobs/{offer.pk}/accept/', {}, format='json').status_code, 200)
-        self.assertEqual(self.client.post(f'/api/riders/jobs/{offer.pk}/accept/', {}, format='json').status_code, 409)
+        self.assertEqual(self.client.post(f'/api/riders/jobs/{offer.pk}/accept/', {}, format='json').status_code, 200)
         self.order.refresh_from_db()
         self.assertEqual(self.order.rider_id, self.rider.pk)
 

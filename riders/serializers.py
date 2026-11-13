@@ -21,7 +21,7 @@ class RiderProfileSerializer(serializers.ModelSerializer):
         fields = ['id', 'user_id', 'name', 'phone', 'is_available', 'score', 'score_updated_at', 'score_version',
                   'job_acceptance_window', 'cancelled_sessions_count', 'last_cancelled_at', 'total_penalties_count',
                   'last_penalty_at', 'penalty_balance', 'penalty_points', 'vehicle_type', 'vehicle_registration',
-                  'vehicle_name', 'vehicle_colour', 'emergency_contact', 'profile_photo', 'created_at', 'profile_completion']
+                  'vehicle_name', 'vehicle_colour', 'emergency_contact', 'profile_photo', 'created_at', 'profile_completion', 'topup_balance']
         read_only_fields = fields
 
 
@@ -90,10 +90,16 @@ class SessionSerializer(serializers.ModelSerializer):
 
 class JobOfferSerializer(serializers.ModelSerializer):
     session = SessionSerializer(read_only=True)
+    acceptance_fee = serializers.SerializerMethodField()
+    acceptance_percent = serializers.IntegerField(default=20, read_only=True)
+
+    def get_acceptance_fee(self, obj):
+        from .wallet import acceptance_fee
+        return str(acceptance_fee(obj.session))
 
     class Meta:
         model = JobOffer
-        fields = ['id', 'status', 'acceptance_window', 'offered_at', 'expires_at', 'session']
+        fields = ['id', 'status', 'acceptance_window', 'offered_at', 'expires_at', 'session', 'acceptance_fee', 'acceptance_percent']
 
 
 class CancellationSerializer(serializers.ModelSerializer):

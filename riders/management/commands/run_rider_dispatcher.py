@@ -1,9 +1,12 @@
+import logging
 import time
 
 from django.core.management.base import BaseCommand
 from django.db import close_old_connections, DatabaseError
 
 from riders.services import dispatch_due
+
+logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
@@ -19,6 +22,7 @@ class Command(BaseCommand):
             try:
                 changed = dispatch_due()
             except DatabaseError as exc:
+                logger.exception('Rider dispatch failed; retrying on the next interval.')
                 self.stderr.write(f'Dispatch will retry after a database error ({type(exc).__name__}).')
                 changed = 0
             if changed:

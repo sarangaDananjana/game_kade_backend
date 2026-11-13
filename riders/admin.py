@@ -1,15 +1,60 @@
+import logging
+
 from django.contrib import admin, messages
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
 from django.http import HttpResponseRedirect
 from django.urls import path, reverse
 from django.utils.html import format_html, format_html_join
-from django.utils import timezone
 
-from .models import JobOffer, RiderCancellation, RiderInfo, RiderPenalty, Session, SessionOrder
+from .models import JobOffer, RiderCancellation, RiderInfo, RiderPenalty, Session, SessionOrder, RiderTopUp, RiderWalletEntry
 from .services import dispatch_due
 from .services import RiderActionError
 from .admin_services import update_session_from_admin
 from .profile import profile_completion
+
+
+logger = logging.getLogger(__name__)
+
+
+def save_error_message(error):
+    if isinstance(error, IntegrityError):
+        logger.warning('Rider admin save conflicted with a database constraint.', exc_info=True)
+        return 'This change conflicts with another saved record. Refresh the page and check the rider and orders before saving again.'
+    return '; '.join(error.messages) if isinstance(error, ValidationError) else str(error)
+
+
+class RiderSaveValidationAdmin(admin.ModelAdmin):
+    """Render save-time validation errors after Django rolls back the POST."""
+
+    def get_form(self, request, obj=None, **kwargs):
+        form_class = super().get_form(request, obj, **kwargs)
+        error = getattr(request, '_rider_admin_save_error', None)
+        if error is None:
+            return form_class
+
+        class SaveErrorForm(form_class):
+            def clean(self):
+                cleaned = super().clean()
+                self.add_error(None, error)
+                return cleaned
+
+        return SaveErrorForm
+
+    def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
+        try:
+            return super().changeform_view(request, object_id, form_url, extra_context)
+        except (ValidationError, RiderActionError, IntegrityError) as error:
+            if request.method != 'POST':
+                raise
+            # The admin transaction has exited, so parent, inline, wallet and
+            # audit-log writes have all rolled back. Bind the same POST again
+            # with a form error to preserve the input without saving it again.
+            request._rider_admin_save_error = save_error_message(error)
+            try:
+                return super().changeform_view(request, object_id, form_url, extra_context)
+            finally:
+                del request._rider_admin_save_error
 
 
 class SessionOrderInline(admin.TabularInline):
@@ -19,13 +64,22 @@ class SessionOrderInline(admin.TabularInline):
 
 
 @admin.register(Session)
-class SessionAdmin(admin.ModelAdmin):
+class SessionAdmin(RiderSaveValidationAdmin):
     list_display = ['id', 'vendor', 'rider_control', 'status_control', 'rider_revenue', 'finance_control', 'date', 'save_control']
     change_list_template = 'admin/riders/session/change_list.html'
     list_filter = ['vendor', 'status', 'finance_status', 'date']
     readonly_fields = ['rider_reference', 'rider_revenue', 'total_revenue', 'session_time', 'created_at', 'updated_at']
     inlines = [SessionOrderInline]
     actions = ['dispatch_sessions', 'confirm_finances']
+
+    def get_readonly_fields(self, request, obj=None):
+        fields = list(super().get_readonly_fields(request, obj))
+        if obj and obj.finance_status == Session.FinanceStatus.CONFIRMED:
+            # Date/time widgets omit microseconds. Rebinding locked timestamps
+            # would change them even when staff submit an unchanged form.
+            fields += [Session._meta.get_field(name).name for name in Session.CONFIRMED_FACT_FIELDS]
+            fields.append('assigned_rider')
+        return list(dict.fromkeys(fields))
 
     def add_view(self, request, form_url='', extra_context=None):
         if not self.has_add_permission(request):
@@ -76,11 +130,12 @@ class SessionAdmin(admin.ModelAdmin):
             raise PermissionDenied
         try:
             rider_id = int(request.POST['rider_id']) if request.POST.get('rider_id') else None
-            update_session_from_admin(session_id, rider_id=rider_id, status=request.POST.get('status'), finance_status=request.POST.get('finance_status'))
-            self.log_change(request, session, 'Updated rider, status, and finances from the session list.')
+            with transaction.atomic():
+                session = update_session_from_admin(session_id, rider_id=rider_id, status=request.POST.get('status'), finance_status=request.POST.get('finance_status'))
+                self.log_change(request, session, 'Updated rider, status, and finances from the session list.')
             self.message_user(request, f'Session {session_id} updated.', messages.SUCCESS)
-        except (RiderActionError, ValidationError, ValueError) as error:
-            self.message_user(request, '; '.join(error.messages) if isinstance(error, ValidationError) else str(error), messages.ERROR)
+        except (RiderActionError, ValidationError, ValueError, IntegrityError) as error:
+            self.message_user(request, save_error_message(error), messages.ERROR)
         return HttpResponseRedirect(reverse('admin:riders_session_changelist'))
 
     @admin.action(description='Offer selected planned sessions to available riders')
@@ -93,19 +148,61 @@ class SessionAdmin(admin.ModelAdmin):
     def confirm_finances(self, request, queryset):
         count = 0
         for session in queryset.filter(status='completed', finance_status='draft'):
-            session.finance_status, session.settled_at = Session.FinanceStatus.CONFIRMED, timezone.now()
-            session.save()
+            try:
+                with transaction.atomic():
+                    session = update_session_from_admin(session.pk, rider_id=session.assigned_rider_id,
+                        status=Session.Status.COMPLETED, finance_status=Session.FinanceStatus.CONFIRMED)
+                    self.log_change(request, session, 'Confirmed session finances.')
+            except (RiderActionError, ValidationError, IntegrityError) as error:
+                self.message_user(request, f'Session {session.pk}: {save_error_message(error)}', messages.ERROR)
+                continue
             count += 1
         self.message_user(request, f'Confirmed {count} completed session revenue splits.', messages.SUCCESS)
 
 
 @admin.register(RiderInfo)
-class RiderInfoAdmin(admin.ModelAdmin):
-    list_display = ['user', 'is_available', 'score', 'job_acceptance_window', 'cancelled_sessions_count', 'penalty_balance']
+class RiderInfoAdmin(RiderSaveValidationAdmin):
+    list_display = ['user', 'topup_balance', 'is_available', 'score', 'job_acceptance_window', 'cancelled_sessions_count', 'penalty_balance']
     list_filter = ['is_available', 'vehicle_type']
     search_fields = ['user__name', 'user__phone_number', 'vehicle_registration', 'vehicle_name', 'vehicle_colour']
     readonly_fields = ['cancelled_sessions_count', 'last_cancelled_at', 'total_penalties_count', 'last_penalty_at',
-                       'penalty_balance', 'penalty_points', 'created_at', 'updated_at']
+                       'penalty_balance', 'penalty_points', 'topup_balance', 'created_at', 'updated_at']
+
+
+@admin.register(RiderTopUp)
+class RiderTopUpAdmin(RiderSaveValidationAdmin):
+    list_display = ['id', 'rider', 'amount', 'payment_reference', 'status', 'reviewed_by', 'created_at']
+    search_fields = ['rider__user__phone_number', 'rider__user__name', 'payment_reference']
+    list_filter = ['created_at']
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj:
+            return [field.name for field in RiderTopUp._meta.fields]
+        return ['request_id', 'status', 'reviewed_by', 'reviewed_at', 'created_at']
+
+    def save_model(self, request, obj, form, change):
+        if change:
+            return
+        super().save_model(request, obj, form, change)
+        from .wallet import review_topup
+        review_topup(obj.pk, request.user, True, obj.staff_note)
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(RiderWalletEntry)
+class RiderWalletEntryAdmin(admin.ModelAdmin):
+    list_display = ['rider', 'kind', 'amount', 'balance_after', 'session_reference', 'created_at']
+    list_filter = ['kind', 'created_at']
+    search_fields = ['rider__user__phone_number', 'rider__user__name']
+    readonly_fields = [field.name for field in RiderWalletEntry._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(JobOffer)

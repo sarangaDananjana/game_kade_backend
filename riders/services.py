@@ -194,9 +194,11 @@ def _locked_offer(rider, offer_id):
 
 
 @transaction.atomic
-def accept_offer(rider, offer_id):
+def accept_offer(rider, offer_id, expected_fee=None):
     session, offer = _locked_offer(rider, offer_id)
     profile = RiderInfo.objects.select_for_update().get(user=rider)
+    if offer.status == JobOffer.Status.ACCEPTED and session.assigned_rider_id == rider.pk:
+        return session
     if not profile_completion(profile)['is_complete']:
         raise RiderActionError('Complete your name, vehicle details, and emergency contact before accepting jobs.', 'profile_incomplete', 403)
     now = timezone.now()
@@ -204,6 +206,10 @@ def accept_offer(rider, offer_id):
         raise RiderActionError('This offer has expired. Refresh Jobs for the next offer.', 'offer_expired')
     if session.status != Session.Status.PLANNED or session.assigned_rider_id or _active_run(rider.pk):
         raise RiderActionError('A delivery run is already active, or this job has been taken.', 'session_unavailable')
+    from .wallet import acceptance_fee, charge_acceptance
+    if expected_fee is not None and expected_fee != acceptance_fee(session):
+        raise RiderActionError('The job amount changed. Refresh Jobs and check the new fee before accepting.', 'offer_changed')
+    charge_acceptance(profile, session, offer)
     offer.status, offer.responded_at = JobOffer.Status.ACCEPTED, now
     offer.save(update_fields=['status', 'responded_at'])
     session.assigned_rider, session.status, session.dispatch_enabled = rider, Session.Status.ACCEPTED, False

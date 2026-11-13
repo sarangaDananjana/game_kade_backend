@@ -116,6 +116,24 @@ DATABASES = {
 }
 
 DATABASES['default']['TIME_ZONE'] = 'Asia/Colombo'
+# Supabase's port 6543 uses transaction pooling. Named cursors cannot survive
+# a switch to another PostgreSQL session between cursor fetches (admin choices
+# use QuerySet.iterator()). Ordinary client-side cursors work with both modes.
+DATABASES['default']['DISABLE_SERVER_SIDE_CURSORS'] = env_bool(
+    os.environ, 'DATABASE_DISABLE_SERVER_SIDE_CURSORS', True,
+)
+
+# Django's default console handler filters out errors when DEBUG=False.
+# Keep unexpected request tracebacks visible in Docker/Gunicorn stderr.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {'stderr': {'class': 'logging.StreamHandler'}},
+    'loggers': {
+        'django.request': {'handlers': ['stderr'], 'level': 'ERROR', 'propagate': False},
+        'riders': {'handlers': ['stderr'], 'level': 'WARNING', 'propagate': False},
+    },
+}
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
@@ -182,6 +200,7 @@ SIMPLE_JWT = {
 
 # Google Maps API Key
 GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY', '')
+GOOGLE_DIRECTIONS_API_KEY = os.environ.get('GOOGLE_DIRECTIONS_API_KEY', '')
 
 # Optional route storage. An existing URI keeps its database name; new setups
 # default to MealDrop. Creating a MongoDB client happens only in route requests.

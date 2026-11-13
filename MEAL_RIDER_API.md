@@ -1,5 +1,15 @@
 # Meal Rider backend and application
 
+## Rider top-up balance and road geometry (2.3.0)
+
+Run rider migration `0006` before deploying this app. Existing balances start at zero. Staff collect money, then use admin → Riders → Rider top ups → Add to credit the rider. Enter the amount, select the rider, and optionally add a collection reference/note. Saving creates the credit and ledger entry transactionally, with the staff identity and timestamp. Credits and wallet ledger entries are immutable in admin; the profile's `topup_balance` is read-only. No rider endpoint accepts top-ups. Card top-ups in the Android app are disabled with Coming soon.
+
+`GET /api/riders/wallet/` returns `balance`, `acceptance_percent` (20), and the latest 100 `transactions` with signed `amount`, `kind` (`topup` or `job_fee`), `balance_after`, `session_reference`, and `created_at`. Profile reads include `topup_balance`. Offers include `acceptance_fee` and `acceptance_percent`. The fee is 20% of rider cut plus fuel, rounded half up to cents. A Rs. 240 offer costs Rs. 48 to accept. `POST /api/riders/jobs/{id}/accept/` optionally accepts `expected_acceptance_fee`; a changed quote returns `409 offer_changed`. Insufficient funds return `409 insufficient_topup_balance` without altering the offer/orders. The fee, offer acceptance and order assignment commit together. Repeating a successful acceptance returns the same session without a new debit. Success includes `topup_balance_after`. Existing active sessions are not charged retrospectively; cancellation does not automatically refund the fee. Gross earnings and penalties remain separate.
+
+`GET /api/riders/sessions/{id}/route/` is authorized only for the assigned rider or a current addressed offer. It returns `status`, encoded Google `polylines`, `distance_meters`, `duration_seconds`, `copyrights`, and `expires_at`; pending responses include `retry_after_seconds`. The backend requests Google Directions driving routes in the existing kitchen/stop order. Identical ordered coordinates share a 24-hour database cache across riders and workers. A 30-second lease suppresses concurrent paid calls. Failed requests are cached for five minutes. Larger routes are split at Google's 25-waypoint limit, with at most one new paid segment per endpoint request. Polling jobs/dashboard never calls Google; geometry is requested only when viewing maps. The app reuses geometry in memory and shows markers plus a message if routing is unavailable.
+
+The existing `GOOGLE_MAPS_API_KEY` is used by default and was verified once against Directions. Optionally configure `GOOGLE_DIRECTIONS_API_KEY` for a separately restricted server key. Preserve the Android Maps key and application ID. Bank/card payment processing is not introduced in this update.
+
 Meal Rider uses the shared Meal Drop users, vendor catalog, and orders. A delivery session is bound to **one vendor**. Session offers, accepted runs, location clusters, verification, cancellation history, scores, and penalties now have rider APIs.
 
 ## Rider profile

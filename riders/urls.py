@@ -5,7 +5,10 @@ from .views import (AdminPenaltyView, AdminScoreView, AdminSessionView, Availabi
     SessionActionView, SessionDetailView, SessionsView)
 
 app_name = 'riders'
+from .wallet_views import WalletView
+from .road_views import RoadRouteView
 urlpatterns = [
+    path('wallet/', WalletView.as_view(), name='wallet'),
     path('profile/', RiderProfileView.as_view(), name='profile'),
     path('availability/', AvailabilityView.as_view(), name='availability'),
     path('dashboard/', DashboardView.as_view(), name='dashboard'),
@@ -13,6 +16,7 @@ urlpatterns = [
     path('jobs/<int:pk>/<str:action>/', OfferActionView.as_view(), name='offer-action'),
     path('sessions/', SessionsView.as_view(), name='sessions'),
     path('sessions/<int:pk>/', SessionDetailView.as_view(), name='session'),
+    path('sessions/<int:pk>/route/', RoadRouteView.as_view(), name='road-route'),
     path('sessions/<int:pk>/orders/<int:order_id>/verify/', DeliveryVerifyView.as_view(), name='verify'),
     path('sessions/<int:pk>/orders/<int:order_id>/failed/', DeliveryFailView.as_view(), name='failed'),
     path('sessions/<int:pk>/<str:action>/', SessionActionView.as_view(), name='session-action'),

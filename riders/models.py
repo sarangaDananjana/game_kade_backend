@@ -11,6 +11,8 @@ from .timeutils import rider_local_date
 
 ZERO = Decimal('0.00')
 
+from .wallet_models import RiderTopUp, RiderWalletEntry, RiderRoadRoute  # noqa: E402, F401
+
 
 class RiderInfo(models.Model):
     user = models.OneToOneField(
@@ -30,6 +32,7 @@ class RiderInfo(models.Model):
     last_penalty_at = models.DateTimeField(null=True, blank=True)
     penalty_balance = models.DecimalField(max_digits=12, decimal_places=2, default=ZERO, validators=[MinValueValidator(ZERO)])
     penalty_points = models.PositiveIntegerField(default=0)
+    topup_balance = models.DecimalField(max_digits=12, decimal_places=2, default=ZERO, validators=[MinValueValidator(ZERO)])
     vehicle_type = models.CharField(max_length=20, choices=[('motorcycle', 'Motorcycle'), ('scooter', 'Scooter'), ('bicycle', 'Bicycle'), ('car', 'Car')], default='motorcycle')
     vehicle_registration = models.CharField(max_length=30, blank=True)
     vehicle_name = models.CharField(max_length=80, blank=True, help_text='Make and model, e.g. Bajaj CT 100.')
@@ -44,6 +47,7 @@ class RiderInfo(models.Model):
             models.CheckConstraint(condition=models.Q(job_acceptance_window__gte=5, job_acceptance_window__lte=600), name='riders_acceptance_window_range'),
             models.CheckConstraint(condition=models.Q(score__isnull=True) | models.Q(score__gte=0, score__lte=100), name='riders_score_range'),
             models.CheckConstraint(condition=models.Q(penalty_balance__gte=0), name='riders_penalty_balance_positive'),
+            models.CheckConstraint(condition=models.Q(topup_balance__gte=0), name='riders_topup_balance_positive'),
         ]
 
     def clean(self):
@@ -88,6 +92,9 @@ class RiderInfo(models.Model):
 
 
 class Session(models.Model):
+    CONFIRMED_FACT_FIELDS = ('rider_cut', 'service_charge', 'fuel_surge_addition', 'finance_status',
+        'settled_at', 'points_awarded', 'session_distance', 'started_at', 'finished_at', 'status', 'date', 'vendor_id')
+
     class Status(models.TextChoices):
         PLANNED = 'planned', 'Planned'
         ACCEPTED = 'accepted', 'Accepted'
@@ -220,9 +227,7 @@ class Session(models.Model):
                 if previous.rider_reference != self.rider_reference:
                     raise ValidationError({'rider_reference': 'The rider reference is set by the assigned rider.'})
                 if previous.finance_status == self.FinanceStatus.CONFIRMED:
-                    financial_fields = ['rider_cut', 'service_charge', 'fuel_surge_addition', 'finance_status', 'settled_at',
-                                        'points_awarded', 'session_distance', 'started_at', 'finished_at', 'status', 'date', 'vendor_id']
-                    if any(getattr(previous, name) != getattr(self, name) for name in financial_fields):
+                    if any(getattr(previous, name) != getattr(self, name) for name in self.CONFIRMED_FACT_FIELDS):
                         raise ValidationError('Confirmed session facts cannot be changed; record an adjustment separately.')
                 if previous.assigned_rider_id != self.assigned_rider_id and self.assigned_rider_id:
                     self.rider_reference = self.assigned_rider_id
