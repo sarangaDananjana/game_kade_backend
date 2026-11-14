@@ -1,0 +1,5 @@
+{% extends "admin/index.html" %}
+{% block content %}
+    <div class="module"><h2>Rider balances</h2><p><a href="{% url 'dispatch-rider-topup' %}">Top up a rider</a> · <a href="{% url 'admin:riders_ridertopup_changelist' %}">Top-up history</a></p><p>Record collected payments. All times use Sri Lanka time (UTC+05:30).</p></div>
+    {{ block.super }}
+{% endblock %}

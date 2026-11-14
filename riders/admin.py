@@ -162,11 +162,15 @@ class SessionAdmin(RiderSaveValidationAdmin):
 
 @admin.register(RiderInfo)
 class RiderInfoAdmin(RiderSaveValidationAdmin):
-    list_display = ['user', 'topup_balance', 'is_available', 'score', 'job_acceptance_window', 'cancelled_sessions_count', 'penalty_balance']
+    list_display = ['user', 'topup_balance', 'top_up_action', 'is_available', 'score', 'job_acceptance_window', 'cancelled_sessions_count', 'penalty_balance']
     list_filter = ['is_available', 'vehicle_type']
     search_fields = ['user__name', 'user__phone_number', 'vehicle_registration', 'vehicle_name', 'vehicle_colour']
     readonly_fields = ['cancelled_sessions_count', 'last_cancelled_at', 'total_penalties_count', 'last_penalty_at',
                        'penalty_balance', 'penalty_points', 'topup_balance', 'created_at', 'updated_at']
+
+    @admin.display(description='Top up')
+    def top_up_action(self, obj):
+        return format_html('<a href="{}?rider={}">Add top up</a>', reverse('dispatch-rider-topup'), obj.user_id)
 
 
 @admin.register(RiderTopUp)

@@ -6,6 +6,7 @@ FROM python:3.13-slim
 # PYTHONUNBUFFERED: Prevents Python from buffering stdout and stderr
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV TZ=Asia/Colombo
 
 # Set work directory
 WORKDIR /app
@@ -18,6 +19,7 @@ RUN apt-get update \
     binutils \
     libproj-dev \
     gdal-bin \
+    tzdata \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

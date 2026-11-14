@@ -12,6 +12,7 @@ from django.db import transaction
 from django.contrib.auth.hashers import make_password
 from django.utils.crypto import constant_time_compare
 from django.utils import timezone
+from core.timeutils import sri_lanka_isoformat
 from rest_framework_simplejwt.views import TokenRefreshView
 from core.throttling import enforce_limits
 
@@ -90,7 +91,7 @@ class SendOTPView(APIView):
                 'delivery_method': 'admin' if bypass_sms else 'sms',
                 'delivery_pending': delivery_pending,
                 'otp_length': len(otp_code),
-                'expires_at': otp.expires_at.isoformat(),
+                'expires_at': sri_lanka_isoformat(otp.expires_at),
                 'expires_in_seconds': max(0, int((otp.expires_at - now).total_seconds())),
             }, status=status.HTTP_202_ACCEPTED if delivery_pending else status.HTTP_200_OK)
         else:

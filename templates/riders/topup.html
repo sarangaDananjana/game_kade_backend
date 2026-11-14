@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Top up a rider · Meal Drop</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root{color-scheme:dark;--bg:#090e0c;--surface:#101915;--ink:#f9fafb;--muted:#cbd5e1;--primary:#10b981;--line:#34433b;--error:#ffb4ab}
+        *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:'Plus Jakarta Sans',sans-serif;line-height:1.6}
+        main{max-width:680px;margin:auto;padding:32px 24px 56px}nav{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:32px}
+        a{color:#6ee7b7;text-underline-offset:4px}a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid #6ee7b7;outline-offset:3px}
+        h1{font-size:clamp(1.7rem,5vw,2.2rem);line-height:1.25;margin:0 0 12px}p{margin:0 0 24px;color:var(--muted)}
+        .balance{padding:18px 0;border-block:1px solid var(--line);margin:24px 0}.balance strong{font-size:1.5rem;font-variant-numeric:tabular-nums}
+        .field{margin:0 0 22px}label{display:block;margin-bottom:8px;font-weight:600}input,select,textarea{width:100%;font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;min-height:48px;padding:12px}
+        textarea{resize:vertical}button{font:inherit;font-weight:700;min-height:48px;padding:12px 20px;border:0;border-radius:8px;background:var(--primary);color:#052e21;cursor:pointer;width:100%}
+        .errorlist{list-style:none;padding:0;margin:8px 0;color:var(--error)}.message{padding:16px;border:1px solid var(--primary);border-radius:8px;margin:20px 0;color:#a7f3d0}
+        footer{margin-top:28px;color:var(--muted);font-size:.875rem}
+    </style>
+</head>
+<body><main>
+    <nav><a href="{% url 'dispatch-dashboard' %}">Back to dashboard</a><a href="{% url 'dispatch-logout' %}">Sign out</a></nav>
+    <h1>Top up a rider</h1>
+    <p>Record money you have collected from a rider. Saving adds it to their available balance.</p>
+    {% for message in messages %}<div class="message" role="status">{{ message }}</div>{% endfor %}
+    <form method="post" novalidate>
+        {% csrf_token %}{{ form.request_id }}
+        {% if form.non_field_errors %}<div role="alert">{{ form.non_field_errors }}</div>{% endif %}
+        <div class="field">{{ form.rider.label_tag }}{{ form.rider }}{{ form.rider.errors }}</div>
+        <div class="balance" aria-live="polite">Available balance<br><strong id="rider-balance">Choose a rider</strong></div>
+        <div class="field">{{ form.amount.label_tag }}{{ form.amount }}{{ form.amount.errors }}</div>
+        <div class="field">{{ form.payment_reference.label_tag }}{{ form.payment_reference }}{{ form.payment_reference.errors }}</div>
+        <div class="field">{{ form.staff_note.label_tag }}{{ form.staff_note }}{{ form.staff_note.errors }}</div>
+        {{ form.request_id.errors }}
+        <button type="submit">Credit rider balance</button>
+    </form>
+    <footer>{{ timezone_label }} · The rider can refresh their balance in the app.</footer>
+</main>
+{{ rider_balances|json_script:"rider-balances" }}
+<script>
+    const balances=JSON.parse(document.getElementById('rider-balances').textContent);
+    const rider=document.getElementById('id_rider');
+    function showBalance(){const value=balances[rider.value];document.getElementById('rider-balance').textContent=value===undefined?'Choose a rider':'Rs. '+Number(value).toLocaleString('en-LK',{minimumFractionDigits:2,maximumFractionDigits:2});}
+    rider.addEventListener('change',showBalance);showBalance();
+</script>
+</body></html>

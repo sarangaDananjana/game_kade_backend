@@ -64,7 +64,7 @@ def main():
         '.impeccable/design.json', '.impeccable/direction-contract.md', '.impeccable/surfaces/meal-rider.md',
         '.impeccable/review/finish-review.md', '.impeccable/review/native-tests.txt',
     ]]
-    for folder in ['gradle', 'app/src', 'docs', 'scripts', '.impeccable/review/verdict', '.impeccable/review/profile-tasks', '.impeccable/review/slides', '.impeccable/review/login', '.impeccable/review/wallet-routes']:
+    for folder in ['gradle', 'app/src', 'docs', 'scripts', '.impeccable/review/verdict', '.impeccable/review/profile-tasks', '.impeccable/review/slides', '.impeccable/review/login', '.impeccable/review/wallet-routes', '.impeccable/review/topup-timezone']:
         source_files.extend(path.relative_to(rider) for path in (rider / folder).rglob('*') if path.is_file())
     counts[source_name] = write_archive(output / source_name, rider, source_files)
     shutil.copyfile(required[-1], output / apk_name)

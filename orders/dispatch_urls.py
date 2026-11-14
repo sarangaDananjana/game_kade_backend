@@ -5,11 +5,13 @@ from .dispatch import (
     admin_orders_api, admin_assign_orders_api, admin_unassign_orders_api,
 )
 from .session_planner import session_planner_view, planning_data_api, create_session_api, offer_session_api
+from riders.topup_views import rider_topup_view
 
 urlpatterns = [
     path('', admin_dashboard_view, name='dispatch-dashboard'),
     path('login/', admin_login_view, name='dispatch-login'),
     path('logout/', admin_logout_view, name='dispatch-logout'),
+    path('riders/top-up/', rider_topup_view, name='dispatch-rider-topup'),
     path('plan/', session_planner_view, name='dispatch-session-planner'),
     path('api/planning/', planning_data_api, name='dispatch-planning-data'),
     path('api/sessions/', create_session_api, name='dispatch-create-session'),

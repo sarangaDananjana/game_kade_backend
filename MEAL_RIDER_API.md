@@ -1,6 +1,22 @@
 # Meal Rider backend and application
 
-## Rider top-up balance and road geometry (2.3.0)
+## Collected rider top-ups and Sri Lanka time (2.3.1)
+
+Deploy this backend source update before using the new collected-payment entry at `/dispatch/riders/top-up/`. Existing platform admins sign in through dispatch and choose **Top up a rider** from the dashboard/menu or rider cards. Django admin home and the Rider information list also link to that entry. An authenticated platform `admin` role can use this form without a Django staff flag; Django admin itself retains its usual access requirements. The original registered form remains at `/admin/riders/ridertopup/add/` for authorized Django staff.
+
+Collect the money first, select an active rider, check their available balance, enter the collected amount in LKR, and optionally add a collection reference/note. **Credit rider balance** creates and approves the top-up, records staff identity and the ledger entry, and updates the balance in one transaction. Server validation requires a positive amount with no more than two decimal places. The form uses CSRF protection, rider-row locking, and a request UUID: replaying a matching submission does not credit again, and reuse with different payment details is rejected. Rider self-crediting/card payments remain unavailable. Credits and ledger entries remain immutable in Django admin; the profile balance remains read-only.
+
+The update has no schema migration. Backends already on rider migration `0006` only need the source/container update; older installations still need the wallet migration documented below. Rebuild and restart the web/dispatcher services to apply the middleware and container timezone configuration. Version 2.3.1/code 107 of the Android app uses this matching backend update.
+
+All customer, dispatch/admin, API, and rider-app time presentation uses `Asia/Colombo` (UTC+05:30). Request middleware activates that zone for Django templates and API formatting, and raw OTP/route-expiry JSON is explicitly localized. Containers use `TZ=Asia/Colombo` with `tzdata` installed. Web `Intl` formatters specify `timeZone: 'Asia/Colombo'` without manually adding 5.5 hours; Android uses its shared English formatter and the same zone for calendar-day boundaries. Date-bearing PIN verification continues to use today's Colombo date. Formatting preserves instants rather than changing stored timestamps.
+
+The separately authorized live correction for session 21 set settlement to `2026-11-13T22:00:00+05:30` (13 November 2026, 10:00 PM Sri Lanka time; `2026-11-13T16:30:00Z`). Its finish remains 13 November at 7:58:50 PM (+05:30), and status/amounts are unchanged; an audit note records the correction. Only that database correction is live: the source UI/backend update has not been deployed.
+
+The implementation review reports 239 passing Django riders/orders/users tests and 32 Android unit tests plus successful debug build/lint. The web review used synthetic funds for Rs. 500.00 to Rs. 750.00, rejected -5, and checked desktop/mobile entry points and fixed-zone presentation with a browser configured for America/Los_Angeles. App review evidence is stored in `.impeccable/review/topup-timezone`; native changes received source review, and the browser packet does not prove live deployment.
+
+## Rider top-up balance and road geometry (2.3.0 history)
+
+The following records the original wallet/route release. Current top-up access and timezone rules are above; migration `0006` remains required when upgrading from an older backend.
 
 Run rider migration `0006` before deploying this app. Existing balances start at zero. Staff collect money, then use admin → Riders → Rider top ups → Add to credit the rider. Enter the amount, select the rider, and optionally add a collection reference/note. Saving creates the credit and ledger entry transactionally, with the staff identity and timestamp. Credits and wallet ledger entries are immutable in admin; the profile's `topup_balance` is read-only. No rider endpoint accepts top-ups. Card top-ups in the Android app are disabled with Coming soon.
 
@@ -34,7 +50,7 @@ The dispatcher picks an active rider account that has no accepted/running sessio
 
 Managers may include `offer_to_rider` with the shared rider user ID in session creation to address the initial offer explicitly. Assignment still occurs only after acceptance; busy/inactive riders are rejected. Subsequent handoff uses the dispatcher when dispatch is enabled.
 
-After acceptance, confirm pickup to start the run. Stops cluster coordinates to six decimal places and sort by distance from the vendor, nearest first. The map shows the pickup and numbered clusters. External Google Maps navigation provides driving directions; the overview polyline shows stop sequence, not a turn-by-turn road route.
+After acceptance, confirm pickup to start the run. Stops cluster coordinates to six decimal places and sort by distance from the vendor, nearest first. The map shows the pickup and numbered clusters. Current overview maps use cached Google Directions driving geometry in that stop order; external Google Maps navigation remains available to the kitchen or a stop. The original stop-sequence line described earlier versions.
 
 The rider submits the customer's four-digit PIN or QR payload for each order. Verification secrets are not included in the new rider responses. Delivery updates the shared order and attempt together; the last resolved order closes the session. A failed delivery retains its reason and timestamp and releases the shared order for operations to schedule a later attempt. Its original session remains valid history when a different rider accepts that later run. Confirm actual finances through the completed session's admin action after reviewing the recorded amounts; the UI distinguishes estimates from confirmed earnings.
 

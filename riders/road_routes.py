@@ -10,6 +10,7 @@ from urllib.request import urlopen
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
+from core.timeutils import sri_lanka_isoformat
 
 from .models import RiderRoadRoute
 from .routes import session_stops
@@ -46,7 +47,7 @@ def _cached_segment(points, budget=None):
         RiderRoadRoute.objects.get_or_create(key=key)
         cached = RiderRoadRoute.objects.select_for_update().get(pk=key)
         if cached.expires_at and cached.expires_at > now:
-            return {**cached.payload, 'expires_at': cached.expires_at.isoformat()}
+            return {**cached.payload, 'expires_at': sri_lanka_isoformat(cached.expires_at)}
         if cached.lease_until and cached.lease_until > now:
             return {'status': 'pending', 'polylines': [], 'retry_after_seconds': 3}
         if budget is not None:
@@ -66,7 +67,7 @@ def _cached_segment(points, budget=None):
     expires_at = timezone.now() + ttl
     # A superseded lease cannot overwrite a newer route.
     RiderRoadRoute.objects.filter(pk=key, lease_until=lease).update(payload=payload, expires_at=expires_at, lease_until=None)
-    return {**payload, 'expires_at': expires_at.isoformat()}
+    return {**payload, 'expires_at': sri_lanka_isoformat(expires_at)}
 
 
 def road_route(session):

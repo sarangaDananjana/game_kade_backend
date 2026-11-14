@@ -111,6 +111,8 @@
             display: flex;
             align-items: center;
             gap: 16px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
         }
 
         .time-pill {
@@ -294,6 +296,7 @@
         }
 
         .rider-card {
+            flex-wrap: wrap;
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid var(--border-subtle);
             border-radius: var(--radius-md);
@@ -947,6 +950,8 @@
 
         /* Responsive tweaks */
         @media (max-width: 900px) {
+            .nav-container { flex-wrap: wrap; align-items: flex-start; }
+            .nav-actions { width: 100%; justify-content: flex-start; gap: 10px; }
             .orders-grid {
                 grid-template-columns: 1fr;
             }
@@ -976,6 +981,7 @@
 
             <div class="nav-actions">
             <a class="btn-ghost" href="{% url 'dispatch-session-planner' %}">Plan a session on a map</a>
+            <a class="btn-ghost" href="{% url 'dispatch-rider-topup' %}">Top up a rider</a>
                 <div class="time-pill">
                     <i class="fa-regular fa-clock"></i>
                     <span id="liveTime">Loading...</span>
@@ -1202,8 +1208,8 @@
         // Live Clock
         function updateClock() {
             const now = new Date();
-            const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
-            document.getElementById('liveTime').textContent = timeStr + ' (LK Time)';
+            const timeStr = now.toLocaleTimeString('en-LK', { timeZone: 'Asia/Colombo', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+            document.getElementById('liveTime').textContent = timeStr + ' (Sri Lanka, UTC+05:30)';
         }
         setInterval(updateClock, 1000);
         updateClock();
@@ -1281,6 +1287,10 @@
                         </div>
                         <div class="rider-badge">
                             <i class="fa-solid fa-box"></i> ${r.assigned_today_count} assigned
+                        </div>
+                        <div>
+                            <div class="rider-phone">Balance: Rs. ${escapeHtml(r.topup_balance || '0.00')}</div>
+                            <a class="btn-ghost" href="{% url 'dispatch-rider-topup' %}?rider=${r.id}" onclick="event.stopPropagation()">Top up</a>
                         </div>
                     </div>
                 `;

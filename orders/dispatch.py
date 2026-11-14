@@ -85,7 +85,7 @@ def admin_orders_api(request):
     ).select_related('user', 'vendor', 'location', 'rider').prefetch_related('items__product').order_by('-created_at')
     
     # Active registered riders
-    riders_qs = CustomUser.objects.filter(role='rider', is_active=True).order_by('name')
+    riders_qs = CustomUser.objects.filter(role='rider', is_active=True).select_related('rider_info').order_by('name')
     
     # Count assigned orders for each rider today (excluding cancelled)
     assigned_counts = Order.objects.filter(
@@ -99,7 +99,8 @@ def admin_orders_api(request):
             'id': r.id,
             'name': r.name or f"Rider #{r.id}",
             'phone_number': r.phone_number,
-            'assigned_today_count': counts_map.get(r.id, 0)
+            'assigned_today_count': counts_map.get(r.id, 0),
+            'topup_balance': str(r.rider_info.topup_balance),
         }
         for r in riders_qs
     ]
